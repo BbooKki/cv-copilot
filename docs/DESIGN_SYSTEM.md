@@ -121,11 +121,21 @@ Suggested hierarchy:
 
 ## Layout
 
-- Desktop: editor/control column on the left and centered CV preview on the right.
+- Desktop: centered CV preview on the left (`60-65%`) and a focused Copilot pane on the right (`35-40%`).
+- The Copilot pane provides clear `Edit` and `Tailor` modes within one continuous workspace. Structured fields remain the primary control for exact CV facts; local-AI output appears as reviewable suggestion cards.
+- Keep template, undo, local-save status, and PDF export in the top toolbar so they remain available from either mode.
 - Use a dark neutral workspace behind the white paper so page edges are obvious.
 - Keep the primary toolbar sticky when useful, with a black translucent background and bottom border.
-- Mobile: switch between `Edit`, `Preview`, and `AI Review` instead of squeezing all panes side by side.
+- Mobile: switch between `CV` and `Copilot` instead of squeezing both panes side by side.
 - The CV preview should preserve real page proportions and predictable print margins.
+
+### Empty states and example content
+
+- Start new users with an empty canonical CV; do not prefill a name, employer, role, dates, job description, or achievements.
+- Do not render fake personal data on the paper preview. When the document is empty, show a restrained workspace empty state without pretending it is CV content.
+- Field labels remain visible. Use placeholders only for necessary format guidance such as a URL or date shape; never use them as substitute user data.
+- New repeatable entries begin empty and receive neutral interface titles such as `New experience` until the user enters content.
+- Keep deterministic sample content behind an explicit `Load example` or demo action.
 
 ## Motion
 

@@ -22,15 +22,24 @@ A technically comfortable job seeker who already has work history and wants a fa
 
 ## Primary journey
 
-1. Start from sample data, a blank CV, or a locally saved draft.
-2. Edit contact details, summary, experience, education, skills, and projects.
-3. Paste a job URL or job-description text.
+1. Start with a blank CV or a locally saved draft; example content is loaded only after an explicit demo action.
+2. Build the CV from the Copilot pane using precise field controls, with a live paper preview beside it.
+3. Paste a job URL or job-description text in the Copilot pane.
 4. Activate and load the local Gemma model.
-5. Analyze fit and generate targeted suggestions.
-6. Accept or reject suggestions individually.
+5. Analyze fit and generate targeted suggestions in the same pane.
+6. Accept or reject suggestions individually and see the preview update.
 7. Switch templates and verify the page preview.
 8. Export or print the CV as PDF.
 9. Optionally sign in and save the document to Supabase.
+
+## Workspace model
+
+- Desktop uses two primary panes: a live PDF-style preview on the left and CV Copilot on the right.
+- The Copilot pane combines structured editing, job input, local-AI controls, and reviewable suggestion cards. It is not an unconstrained chatbot.
+- Selecting an editing section exposes its exact fields; users do not need to express precise facts such as dates or contact details conversationally.
+- AI changes always remain explicit accept/reject actions with original and proposed text.
+- Mobile switches between `CV` and `Copilot` views instead of compressing both panes.
+- A new user never sees another person's CV as their own document. Demo fixtures remain available only through an explicit `Load example` action.
 
 ## MVP acceptance criteria
 

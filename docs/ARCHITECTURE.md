@@ -52,6 +52,7 @@ src/
 ## State model
 
 - `CvDocument` is the only source of truth for resume content.
+- The initial document is structurally valid but contains no personal or career facts. Sample fixtures are test/demo dependencies and are never the implicit production state.
 - Editor actions operate through typed commands.
 - `AiAnalysis` is stored separately from `CvDocument`.
 - Accepting a suggestion creates a reversible patch and updates `CvDocument`.
@@ -60,9 +61,9 @@ src/
 
 ## Runtime flow
 
-1. Load a local document or seed example.
+1. Load a valid local document or create a blank document. Load an example only after an explicit user action.
 2. Validate it against the CV schema.
-3. Render editor and selected template from the same object.
+3. Render the left-hand preview and right-hand Copilot controls from the same object.
 4. Normalize pasted job text or retrieve it through `/api/extract-job`.
 5. Build a bounded prompt containing the trusted instruction, CV facts, and untrusted job text in clearly delimited sections.
 6. Ask Gemma for JSON matching `AI_PROTOCOL.md`.
