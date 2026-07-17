@@ -393,9 +393,10 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     const message = (inputOverride ?? tailorInput).trim();
     if (!message || cloudBusy || extracting) return;
     setTailorInput('');
-    setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'user', text: message}]);
+    const isUrl = /^https?:\/\/\S+$/i.test(message);
+    setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'user', text: isUrl ? compactUrl(message) : message}]);
 
-    if (/^https?:\/\/\S+$/i.test(message)) {
+    if (isUrl) {
       void handleExtract(message, true);
       return;
     }
@@ -653,7 +654,7 @@ function appRoute(pathname: string): 'landing' | 'workspace' | 'account' | 'pass
 function ChatBubble({role, children}: {role: TailorMessage['role']; children: React.ReactNode}) {
   return <div className={`flex items-start gap-2.5 ${role === 'user' ? 'justify-end' : ''}`}>
     {role === 'assistant' && <div className="grid h-7 w-7 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={13} /></div>}
-    <div className={`max-w-[88%] whitespace-pre-wrap border px-3 py-2.5 text-sm leading-5 ${role === 'user' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-white/[.04] text-neutral-300'}`}>{children}</div>
+    <div className={`min-w-0 max-w-[88%] overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere] border px-3 py-2.5 text-sm leading-5 ${role === 'user' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-white/[.04] text-neutral-300'}`}>{children}</div>
   </div>;
 }
 
@@ -664,6 +665,17 @@ function ChatStatus({children}: {children: React.ReactNode}) {
 function compactJobMessage(text: string): string {
   const compact = text.replace(/\s+/g, ' ').trim();
   return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact;
+}
+
+function compactUrl(url: string): string {
+  const clip = (value: string) => (value.length > 52 ? `${value.slice(0, 51)}…` : value);
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    return clip(`${parsed.hostname.replace(/^www\./, '')}${path}`);
+  } catch {
+    return clip(url);
+  }
 }
 
 function answerFromAnalysis(question: string, analysis: AiAnalysisResult, handled: Record<string, 'accepted' | 'rejected'>): string {
