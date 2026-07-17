@@ -135,7 +135,7 @@ Gemma may recommend presentation settings but must not generate HTML, CSS, React
 ```ts
 export type AiDesignRecommendation = {
   protocolVersion: 1;
-  templateId: "classic" | "modern";
+  templateId: "classic" | "modern" | "sidebar" | "minimal";
   density: "comfortable" | "compact";
   accentColor: "#262626" | "#1f2937" | "#334155" | "#3f3f46" | "#1f3a5f";
   rationale: string;
@@ -146,7 +146,7 @@ export type AiDesignRecommendation = {
 - Validate the output with an exact schema and fixed allowlists.
 - Display current and proposed settings with the rationale.
 - Apply all presentation changes only after explicit user acceptance and record them in the normal undo history.
-- Design recommendations never modify CV content or create a third template.
+- Design recommendations never modify CV content or create a renderer outside the four-template allowlist.
 
 ## Context strategy
 

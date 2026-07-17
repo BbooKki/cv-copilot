@@ -3,7 +3,7 @@
 ## Must ship
 
 - Structured CV editor with local persistence
-- Two polished templates using one CV schema
+- Four polished, visually distinct templates using one CV schema
 - Job-description paste input
 - Guarded job URL extraction with pasted-text fallback
 - Consent-gated cloud analysis with optional Gemma Private Mode
@@ -34,7 +34,7 @@
 ## Will not ship
 
 - Freeform canvas editing
-- More than two templates
+- User-authored or marketplace templates
 - Autonomous internet search without explicit user approval
 - DOCX import/export
 - Payments
@@ -49,7 +49,7 @@
 |---|---|
 | 0-2 | Read specifications, scaffold app, establish CV schema and fictional test fixture |
 | 2-7 | Editor, local persistence, commands, undo, and live template preview |
-| 7-10 | Second template and print/PDF layout |
+| 7-10 | Four fixed templates and print/PDF layout |
 | 10-14 | Port Gemma worker, model cache, capability checks, and streaming UI |
 | 14-17 | Job text ingestion, extraction endpoint, and structured AI protocol |
 | 17-19 | Suggestion review, accept/reject, validation, and error states |

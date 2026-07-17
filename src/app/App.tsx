@@ -23,6 +23,7 @@ import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
 import {CvPreview} from '../templates/CvPreview';
 import {TemplatePicker} from '../templates/TemplatePicker';
+import {templateName} from '../templates/templateCatalog';
 import {STYLE_PRESETS} from '../templates/presets';
 import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
@@ -508,7 +509,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
 
     <div className="print-root mx-auto grid max-w-[1800px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,40%)]">
       <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:overflow-y-auto lg:px-6 ${view !== 'cv' ? 'hidden lg:block' : ''}`} aria-label="CV preview workspace">
-        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports. Click any text field to edit it.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{document.settings.templateId === 'modern' ? 'Modern Mono' : 'Classic ATS'} · {document.settings.density}</p></div>
+        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports. Click any text field to edit it.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{templateName(document.settings.templateId)} · {document.settings.density}</p></div>
         <div className="paper-frame">{cvHasContent ? <CvPreview document={document} onEditField={openFieldEditor} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
       </section>
 

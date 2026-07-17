@@ -1,45 +1,45 @@
 import {memo} from 'react';
-import type {CvDocument} from '../cv/schema';
-import type {CvFieldTarget} from '../editor/fieldTargets';
 import {Editable} from './Editable';
+import {contactValues, dateRange, getTemplateData, type TemplateProps} from './templateData';
 
-type TemplateProps = {document: CvDocument; onEditField?: (target: CvFieldTarget) => void};
+const sectionTitleClass = 'mb-4 flex items-center gap-3 font-sans text-[8pt] font-semibold uppercase tracking-[.2em] text-neutral-900 before:h-px before:w-5 before:bg-current';
 
 export const ModernTemplate = memo(function ModernTemplate({document, onEditField}: TemplateProps) {
-  const accent = document.settings.accentColor;
   const compact = document.settings.density === 'compact';
-  const experience = document.experience.filter(item => item.company || item.role || item.startDate || item.highlights.some(highlight => highlight.text));
-  const education = document.education.filter(item => item.institution || item.qualification || item.field);
-  const projects = document.projects.filter(item => item.name || item.description || item.technologies.length || item.highlights.some(highlight => highlight.text));
-  const skills = document.skills.filter(item => item.name || item.keywords.length);
-  const languages = document.languages.filter(item => item.language || item.proficiency);
+  const accent = document.settings.accentColor;
+  const {experience, education, projects, skills, languages, customSections} = getTemplateData(document);
+  const contacts = contactValues(document);
+
   return (
-    <article className={`paper font-[Arial,sans-serif] ${compact ? 'text-[9pt] leading-[1.35]' : 'text-[10pt] leading-[1.5]'}`} data-page-size={document.settings.pageSize} aria-label="Modern CV preview">
-      <header className={`text-white ${compact ? 'px-[12mm] py-[9mm]' : 'px-[15mm] py-[13mm]'}`} style={{backgroundColor: accent}}>
-        <p className="text-[9pt] uppercase tracking-[.25em] text-white/65">Curriculum Vitae</p>
-        <h1 className="mt-2 text-[28pt] font-bold leading-none">{document.basics.fullName}</h1>
-        {document.basics.headline && <p className="mt-3 text-[12pt] text-white/75">{document.basics.headline}</p>}
-      </header>
-      <div className="grid min-h-[240mm] grid-cols-[31%_1fr]">
-        <aside className={`bg-neutral-100 ${compact ? 'px-[7mm] py-[8mm]' : 'px-[9mm] py-[11mm]'}`}>
-          <ModernSection title="Contact">{[document.basics.email, document.basics.phone, document.basics.location, document.basics.website].filter(Boolean).map(value => <p key={value} className="mb-2 break-words text-[9pt] text-neutral-600">{value}</p>)}</ModernSection>
-          {skills.length > 0 && <ModernSection title="Skills">{skills.map(skill => <div key={skill.id} className="mb-3"><p className="font-bold text-neutral-900">{skill.name}</p><p className="text-[9pt] text-neutral-600">{skill.keywords.join(' · ')}</p></div>)}</ModernSection>}
-          {education.length > 0 && <ModernSection title="Education">{education.map(item => <div key={item.id} className="mb-4"><p className="font-bold text-neutral-900">{item.qualification}</p>{item.field && <p>{item.field}</p>}<p className="text-[9pt] text-neutral-600">{item.institution}<br />{[item.startDate, item.endDate].filter(Boolean).join(' — ')}</p></div>)}</ModernSection>}
-          {languages.length > 0 && <ModernSection title="Languages">{languages.map(item => <p key={item.id} className="mb-2"><strong>{item.language}</strong><br /><span className="text-[9pt] text-neutral-600">{item.proficiency}</span></p>)}</ModernSection>}
-        </aside>
-        <div className={compact ? 'px-[8mm] py-[8mm]' : 'px-[11mm] py-[11mm]'}>
-          {document.summary && <ModernSection title="Profile"><p className="text-neutral-700"><Editable target={{kind: 'summary'}} onEdit={onEditField}>{document.summary}</Editable></p></ModernSection>}
-          {experience.length > 0 && <ModernSection title="Experience">{experience.map(item => <div key={item.id} className="mb-5 break-inside-avoid">
-            <div className="flex items-start justify-between gap-4"><div><h3 className="text-[11pt] font-bold text-neutral-950">{item.role}</h3><p className="font-semibold text-neutral-600">{item.company}</p></div><p className="shrink-0 text-right text-[8.5pt] uppercase tracking-wide text-neutral-500">{item.startDate}<br />{item.current ? 'Present' : item.endDate}</p></div>
-            {item.highlights.some(highlight => highlight.text) && <ul className="mt-2 list-disc space-y-1 pl-4 text-neutral-700">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}><Editable target={{kind: 'experience-highlight', itemId: item.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}
-          </div>)}</ModernSection>}
-          {projects.length > 0 && <ModernSection title="Selected Projects">{projects.map(project => <div key={project.id} className="mb-4 break-inside-avoid"><h3 className="font-bold text-neutral-950">{project.name}</h3><p className="text-[8.5pt] uppercase tracking-wide text-neutral-500">{project.technologies.join(' · ')}</p>{project.description && <p className="mt-1 text-neutral-700"><Editable target={{kind: 'project-description', itemId: project.id}} onEdit={onEditField}>{project.description}</Editable></p>}</div>)}</ModernSection>}
+    <article className={`paper font-[Georgia,serif] text-neutral-800 ${compact ? 'p-[11mm] text-[9pt] leading-[1.38]' : 'p-[15mm] text-[9.75pt] leading-[1.5]'}`} data-page-size={document.settings.pageSize} aria-label="Modern Editorial CV preview">
+      <header className={`grid grid-cols-[1fr_55mm] gap-10 border-b ${compact ? 'pb-5' : 'pb-8'}`} style={{borderBottomColor: accent}}>
+        <div>
+          <p className="mb-3 font-sans text-[8pt] font-semibold uppercase tracking-[.24em]" style={{color: accent}}>Professional profile</p>
+          <h1 className="text-[31pt] font-normal leading-[.94] tracking-[-.045em] text-neutral-950">{document.basics.fullName}</h1>
+          {document.basics.headline && <p className="mt-3 text-[12pt] italic text-neutral-600">{document.basics.headline}</p>}
         </div>
+        {contacts.length > 0 && <div className="self-end border-l pl-5 font-sans text-[8pt] leading-[1.6] text-neutral-600" style={{borderLeftColor: accent}}>{contacts.map(value => <p key={value} className="break-words">{value}</p>)}</div>}
+      </header>
+
+      <div className={`grid grid-cols-[minmax(0,1fr)_52mm] gap-10 ${compact ? 'pt-5' : 'pt-8'}`}>
+        <div className={compact ? 'space-y-4' : 'space-y-6'}>
+          {document.summary && <section><h2 className={sectionTitleClass}>Profile</h2><p className="text-[10.5pt] leading-[1.55] text-neutral-700"><Editable target={{kind: 'summary'}} onEdit={onEditField}>{document.summary}</Editable></p></section>}
+          {experience.length > 0 && <section><h2 className={sectionTitleClass}>Experience</h2><div className={compact ? 'space-y-4' : 'space-y-6'}>{experience.map(item => <article key={item.id} className="break-inside-avoid border-l pl-5" style={{borderLeftColor: accent}}>
+            <p className="font-sans text-[7.5pt] font-semibold uppercase tracking-[.12em] text-neutral-500">{dateRange(item.startDate, item.endDate, item.current)}</p>
+            <h3 className="mt-1 text-[12pt] leading-tight text-neutral-950">{item.role}</h3>
+            <p className="mt-0.5 italic text-neutral-600">{item.company}{item.location ? ` · ${item.location}` : ''}</p>
+            {item.highlights.some(highlight => highlight.text) && <ul className="mt-2 space-y-1.5 pl-0">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id} className="relative pl-4 before:absolute before:left-0 before:content-['—']"><Editable target={{kind: 'experience-highlight', itemId: item.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}
+          </article>)}</div></section>}
+          {projects.length > 0 && <section><h2 className={sectionTitleClass}>Selected work</h2><div className="space-y-4">{projects.map(project => <article key={project.id} className="break-inside-avoid"><div className="flex items-baseline justify-between gap-4"><h3 className="text-[11pt] text-neutral-950">{project.name}</h3>{project.url && <span className="max-w-[45%] break-all font-sans text-[7pt] text-neutral-500">{project.url}</span>}</div>{project.technologies.length > 0 && <p className="mt-1 font-sans text-[7.5pt] font-semibold uppercase tracking-[.08em]" style={{color: accent}}>{project.technologies.join(' · ')}</p>}{project.description && <p className="mt-1.5"><Editable target={{kind: 'project-description', itemId: project.id}} onEdit={onEditField}>{project.description}</Editable></p>}{project.highlights.some(highlight => highlight.text) && <ul className="mt-1.5 space-y-1 pl-4">{project.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}><Editable target={{kind: 'project-highlight', itemId: project.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}</article>)}</div></section>}
+          {customSections.map(section => <section key={section.id}><h2 className={sectionTitleClass}>{section.title}</h2><div className="space-y-3">{section.items.map(item => <article key={item.id} className="break-inside-avoid">{item.heading && <h3 className="text-[10.5pt] text-neutral-950">{item.heading}</h3>}<p>{item.text}</p></article>)}</div></section>)}
+        </div>
+
+        <aside className={compact ? 'space-y-5' : 'space-y-7'}>
+          {skills.length > 0 && <section><h2 className={sectionTitleClass}>Expertise</h2><div className="space-y-3">{skills.map(skill => <div key={skill.id}><h3 className="font-sans text-[8.5pt] font-semibold text-neutral-950">{skill.name}</h3>{skill.keywords.length > 0 && <p className="mt-0.5 text-neutral-600">{skill.keywords.join(' · ')}</p>}</div>)}</div></section>}
+          {education.length > 0 && <section><h2 className={sectionTitleClass}>Education</h2><div className="space-y-4">{education.map(item => <article key={item.id} className="break-inside-avoid"><h3 className="text-[10pt] text-neutral-950">{item.qualification}</h3>{item.field && <p className="italic text-neutral-600">{item.field}</p>}<p className="mt-1 font-sans text-[8pt] text-neutral-500">{item.institution}<br />{dateRange(item.startDate, item.endDate)}{item.location ? ` · ${item.location}` : ''}</p>{item.highlights.some(highlight => highlight.text) && <ul className="mt-1 list-disc pl-4">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}</article>)}</div></section>}
+          {languages.length > 0 && <section><h2 className={sectionTitleClass}>Languages</h2><div className="space-y-2">{languages.map(item => <p key={item.id}><strong className="font-normal text-neutral-950">{item.language}</strong>{item.proficiency && <><br /><span className="font-sans text-[8pt] text-neutral-500">{item.proficiency}</span></>}</p>)}</div></section>}
+        </aside>
       </div>
     </article>
   );
 });
-
-function ModernSection({title, children}: {title: string; children: React.ReactNode}) {
-  return <section className="mb-6"><h2 className="mb-3 text-[9pt] font-bold uppercase tracking-[.18em] text-neutral-950">{title}</h2>{children}</section>;
-}
