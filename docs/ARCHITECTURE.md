@@ -22,13 +22,17 @@ The browser owns the canonical CV state, template rendering, local persistence, 
 
 ### Gemma worker
 
-The worker owns model download, integrity-size checks, cache access, engine initialization, conversation lifecycle, streaming, cancellation, and structured generation. Worker messages use a typed protocol. The UI never accesses the inference engine directly.
+The worker owns model download, integrity-size checks, cache access, engine initialization, conversation lifecycle, streaming, cancellation, and structured generation. Worker messages use a typed protocol. Every generation event carries a request ID, generation is serialized, and the UI ignores stale events. The UI never accesses the inference engine directly.
 
 Vite serves the worker as an ES module in development, but production must bundle and launch it as a classic worker because LiteRT's Emscripten WASM loader uses `importScripts()`. Do not force Vite's worker output format to `es`.
 
 WebGPU initialization has a three-minute watchdog. Cancelling or timing out initialization terminates and recreates the worker because aborting the completed model fetch cannot interrupt `Engine.create()`. A verified cached model remains available for retry without another network download.
 
+Before a first download, the UI requires enough estimated browser storage for the verified model plus operational headroom. Cache writes may run alongside streamed loading, but the UI reports the cache as verified only after the model stream passes its byte check and engine creation succeeds. A failed new download is removed from cache.
+
 Runtime sessions explicitly disable audio and vision modalities. Every text generation has a 90-second watchdog; timeout cancels the worker generation, retains partial output for local diagnosis, and retries only the failed compact stage.
+
+The worker reports `queued`, conversation creation, conversation ready, and first-token/decode phases. The UI shows the phase, elapsed time, and local output character count without exposing CV text in logs.
 
 ### Job extraction function
 

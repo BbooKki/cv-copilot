@@ -7,7 +7,7 @@ describe('Gemma runtime protocol', () => {
   });
 
   it('uses a larger bounded analysis response and compact non-analysis responses', () => {
-    expect(GEMMA_GENERATION_CONFIG.analysis.maxOutputTokens).toBe(1_900);
+    expect(GEMMA_GENERATION_CONFIG.analysis.maxOutputTokens).toBe(900);
     expect(GEMMA_GENERATION_CONFIG['analysis-repair'].maxOutputTokens).toBeLessThan(GEMMA_GENERATION_CONFIG.analysis.maxOutputTokens);
     expect(GEMMA_GENERATION_CONFIG.design.maxOutputTokens).toBeLessThan(GEMMA_GENERATION_CONFIG['analysis-repair'].maxOutputTokens);
   });

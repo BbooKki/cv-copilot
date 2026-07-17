@@ -11,6 +11,8 @@ type Props = {
   hasContent: boolean;
   isDesignGenerating: boolean;
   generationElapsedLabel: string;
+  generationPhaseLabel: string;
+  generatedCharacters: number;
   recommendation: AiDesignRecommendation | null;
   error: string;
   onOpenTailor: () => void;
@@ -20,7 +22,7 @@ type Props = {
   onDismiss: () => void;
 };
 
-export function DesignAssistantPanel({settings, status, progressPercent, hasContent, isDesignGenerating, generationElapsedLabel, recommendation, error, onOpenTailor, onGenerate, onCancel, onAccept, onDismiss}: Props) {
+export function DesignAssistantPanel({settings, status, progressPercent, hasContent, isDesignGenerating, generationElapsedLabel, generationPhaseLabel, generatedCharacters, recommendation, error, onOpenTailor, onGenerate, onCancel, onAccept, onDismiss}: Props) {
   const [direction, setDirection] = useState('');
 
   return <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="ai-design-title">
@@ -33,7 +35,7 @@ export function DesignAssistantPanel({settings, status, progressPercent, hasCont
     {status === 'unsupported' && <p className="mt-4 text-xs leading-5 text-amber-300">Design recommendations require a WebGPU-enabled Chrome or Edge browser over HTTPS. Manual template controls remain available.</p>}
 
     {status === 'ready' && !recommendation && <div className="mt-4"><label className="block"><span className="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Design direction · optional</span><textarea rows={3} className="focus-ring w-full resize-y border border-white/10 bg-black p-3 text-sm leading-5 text-white outline-none focus:border-white/40" value={direction} onChange={event => setDirection(event.target.value)} /></label><button disabled={!hasContent} className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" onClick={() => onGenerate(direction)}><Palette size={14} />Recommend a design</button>{!hasContent && <p className="mt-2 text-[10px] leading-4 text-neutral-600">Add CV content before requesting a layout recommendation.</p>}</div>}
-    {isDesignGenerating && <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={onCancel}><Square size={12} fill="currentColor" />Stop design recommendation · {generationElapsedLabel}</button>}
+    {isDesignGenerating && <div className="mt-4"><div className="mb-2 flex justify-between font-mono text-[9px] uppercase tracking-wider text-neutral-500"><span>{generationPhaseLabel}</span><span>{generatedCharacters} chars local</span></div><button className="focus-ring flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={onCancel}><Square size={12} fill="currentColor" />Stop design recommendation · {generationElapsedLabel}</button></div>}
     {error && <p className="mt-4 border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{error}</p>}
 
     {recommendation && <article className="mt-4 border border-white/15 bg-black p-3"><div className="flex items-center justify-between gap-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">Gemma recommends</p><span className="h-4 w-4 border border-white/20" style={{backgroundColor: recommendation.accentColor}} aria-label={`Accent ${recommendation.accentColor}`} /></div><p className="mt-2 text-sm font-semibold">{labelTemplate(recommendation.templateId)} · {labelDensity(recommendation.density)}</p><p className="mt-2 text-xs leading-5 text-neutral-400">{recommendation.rationale}</p><p className="mt-3 font-mono text-[9px] uppercase tracking-wider text-neutral-600">Current: {labelTemplate(settings.templateId)} · {labelDensity(settings.density)}</p><div className="mt-3 flex gap-2"><button className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={onAccept}><Check size={12} />Apply design</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={onDismiss}><X size={12} />Dismiss</button></div></article>}

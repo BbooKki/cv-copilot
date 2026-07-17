@@ -36,7 +36,7 @@ describe('useGemma', () => {
     await act(async () => Promise.resolve());
     const firstWorker = FakeWorker.instances[0];
 
-    act(() => firstWorker.emit({type: 'cache-status', cached: true}));
+    act(() => firstWorker.emit({type: 'cache-status', cached: true, verified: false}));
     act(() => result.current.load());
     act(() => firstWorker.emit({type: 'initializing'}));
     act(() => vi.advanceTimersByTime(GEMMA_INITIALIZATION_TIMEOUT_MS));
@@ -84,7 +84,7 @@ describe('useGemma', () => {
 
     act(() => result.current.generate('Recommend a design.', 'design'));
 
-    expect(FakeWorker.instances[0].messages).toContainEqual({type: 'generate', prompt: 'Recommend a design.', kind: 'design'});
+    expect(FakeWorker.instances[0].messages).toContainEqual({type: 'generate', requestId: 1, prompt: 'Recommend a design.', kind: 'design'});
     unmount();
   });
 
@@ -95,12 +95,47 @@ describe('useGemma', () => {
     const worker = FakeWorker.instances[0];
 
     act(() => result.current.generate('Analyze this role.'));
-    act(() => worker.emit({type: 'generation-chunk', text: '{"partial":'}));
+    act(() => worker.emit({type: 'generation-chunk', requestId: 1, text: '{"partial":'}));
     act(() => vi.advanceTimersByTime(GEMMA_GENERATION_TIMEOUT_MS));
 
-    expect(worker.messages).toContainEqual({type: 'cancel-generation'});
+    expect(worker.messages).toContainEqual({type: 'cancel-generation', requestId: 1});
     expect(onTimeout).toHaveBeenCalledWith('{"partial":');
     expect(result.current.status).toBe('ready');
+    unmount();
+  });
+
+  it('ignores chunks and completion from an older generation request', async () => {
+    const onComplete = vi.fn();
+    const {result, unmount} = renderHook(() => useGemma(onComplete));
+    await act(async () => Promise.resolve());
+    const worker = FakeWorker.instances[0];
+
+    act(() => result.current.generate('First request.'));
+    act(() => result.current.generate('Replacement request.'));
+    act(() => worker.emit({type: 'generation-chunk', requestId: 1, text: 'stale'}));
+    act(() => worker.emit({type: 'generation-complete', requestId: 1, totalMs: 10}));
+    expect(onComplete).not.toHaveBeenCalled();
+
+    act(() => worker.emit({type: 'generation-phase', requestId: 2, phase: 'decoding'}));
+    act(() => worker.emit({type: 'generation-chunk', requestId: 2, text: '{"fresh":true}'}));
+    act(() => worker.emit({type: 'generation-complete', requestId: 2, totalMs: 20}));
+
+    expect(onComplete).toHaveBeenCalledWith('{"fresh":true}');
+    expect(result.current.generatedCharacters).toBe(14);
+    expect(result.current.generationPhase).toBeNull();
+    unmount();
+  });
+
+  it('blocks a new model download when browser storage is insufficient', async () => {
+    Object.defineProperty(navigator, 'storage', {configurable: true, value: {estimate: vi.fn().mockResolvedValue({quota: 2_100_000_000, usage: 0})}});
+    const {result, unmount} = renderHook(() => useGemma(vi.fn()));
+    await act(async () => Promise.resolve());
+
+    act(() => result.current.load());
+
+    expect(FakeWorker.instances[0].messages.some(message => message.type === 'load')).toBe(false);
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toMatch(/free browser storage/i);
     unmount();
   });
 });

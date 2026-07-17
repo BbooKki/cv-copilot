@@ -15,9 +15,12 @@ vi.mock('../gemma/useGemma', () => ({
     return {
       status: 'ready' as const,
       cached: true,
+      cacheVerified: true,
       progress: {received: 0, total: 2_008_432_640},
       error: '',
       capability: {webGpu: true, secureContext: true, storageAvailable: 4_000_000_000},
+      generationPhase: null,
+      generatedCharacters: 0,
       load: vi.fn(),
       generate: gemmaHarness.generate,
       cancel: vi.fn(),
@@ -100,5 +103,36 @@ describe('split tailoring flow', () => {
 
     await waitFor(() => expect(gemmaHarness.generate).toHaveBeenCalledTimes(3));
     expect(gemmaHarness.generate.mock.calls[2]?.[1]).toBe('analysis-repair');
+  });
+
+  it('rejects a structurally valid suggestion that cites unknown CV evidence', async () => {
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
+
+    act(() => gemmaHarness.complete?.(JSON.stringify({
+      protocolVersion: 1,
+      fitSummary: 'The CV has limited evidence for this role.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [],
+    })));
+    act(() => gemmaHarness.complete?.(JSON.stringify({
+      protocolVersion: 1,
+      suggestions: [{
+        id: 'unsafe-evidence',
+        target: {section: 'summary', field: 'summary'},
+        originalText: '',
+        proposedText: 'Frontend engineer.',
+        reason: 'Focus the summary.',
+        evidenceIds: ['not-in-the-cv'],
+      }],
+    })));
+
+    expect(await screen.findByText(/unknown evidence ID not-in-the-cv/)).toBeInTheDocument();
+    expect(screen.getByText('The CV has limited evidence for this role.')).toBeInTheDocument();
   });
 });
