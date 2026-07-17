@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
+import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
 import {applySuggestion, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
@@ -32,6 +33,7 @@ export function App() {
   const [jobError, setJobError] = useState('');
   const [analysis, setAnalysis] = useState<AiAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState('');
+  const [invalidAnalysisOutput, setInvalidAnalysisOutput] = useState<{message: string; raw: string} | null>(null);
   const [designRecommendation, setDesignRecommendation] = useState<AiDesignRecommendation | null>(null);
   const [designError, setDesignError] = useState('');
   const [handledSuggestions, setHandledSuggestions] = useState<Record<string, 'accepted' | 'rejected'>>({});
@@ -51,13 +53,14 @@ export function App() {
         setAnalysis(parseAiResult(raw));
         setHandledSuggestions({});
         setAnalysisError('');
+        setInvalidAnalysisOutput(null);
         setCopilotMode('tailor');
         setView('copilot');
       }
     } catch (cause) {
       const message = cause instanceof Error ? `The local model returned invalid structured output: ${cause.message}` : 'Unable to validate the local model output.';
       if (completedMode === 'design') setDesignError(message);
-      else setAnalysisError(message);
+      else { setAnalysisError(''); setInvalidAnalysisOutput({message, raw}); }
     }
   }, []);
   const gemma = useGemma(handleModelComplete);
@@ -99,12 +102,13 @@ export function App() {
     finally { setExtracting(false); }
   };
 
-  const runLocalAnalysis = () => {
+  const runLocalAnalysis = (repair = false) => {
     if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
-    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 5, language: 'en'}};
+    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
     generationMode.current = 'analysis';
     setAnalysisError('');
-    gemma.generate(buildAnalysisPrompt(request));
+    setInvalidAnalysisOutput(null);
+    gemma.generate(buildAnalysisPrompt(request, {repair}));
   };
 
   const runDesignRecommendation = (direction: string) => {
@@ -174,10 +178,11 @@ export function App() {
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div>{gemma.status === 'initializing' && <p className="mt-3 text-[10px] leading-4 text-neutral-600">This can take up to 3 minutes. LiteRT may report an unavailable NPU while continuing normally with WebGPU.</p>}<button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
             {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
             {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={runLocalAnalysis}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
+            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
           </section>
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
+          {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} onRetry={() => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
           {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
           <CloudPanel document={document} onLoad={updateDocument} />
         </div>}

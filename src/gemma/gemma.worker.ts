@@ -38,7 +38,7 @@ async function createConversation(): Promise<Conversation> {
   return engine.createConversation({
     preface: {messages: [{role: 'system', content: SYSTEM_PROMPT}]},
     prefillPrefaceOnInit: false,
-    sessionConfig: {maxOutputTokens: 900, samplerParams: {temperature: 0.2, p: 0.9, k: 40}},
+    sessionConfig: {maxOutputTokens: 1200, samplerParams: {temperature: 0.15, p: 0.9, k: 40}},
   });
 }
 

@@ -117,3 +117,5 @@ The known portfolio implementation uses a 4,096-token context. For this MVP:
 - Extract the job title, company, responsibilities, qualifications, and keywords before analysis when necessary.
 - Analyze sections independently if the combined request is too large.
 - Keep the system prompt concise and cap generated suggestions.
+- Keep analysis input within an explicit character budget: compact CV facts without contact or presentation metadata, plus at most 2,500 job-description characters.
+- Request at most three concise suggestions and reserve 1,200 output tokens. If the response is malformed, retain a local raw-output preview and offer a smaller structured retry.
