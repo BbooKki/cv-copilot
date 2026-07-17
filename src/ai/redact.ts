@@ -11,6 +11,7 @@ import type {CvDocument} from '../cv/schema';
 export function redactCvForCloud(document: CvDocument): CvDocument {
   return {
     ...document,
+    title: '',
     basics: {
       ...document.basics,
       fullName: '',

@@ -18,6 +18,7 @@ export type AiProviderErrorCode =
   | 'quota'
   | 'auth'
   | 'invalid-output'
+  | 'busy'
   | 'unsupported'
   | 'unknown';
 

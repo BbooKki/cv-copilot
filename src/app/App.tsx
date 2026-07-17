@@ -12,7 +12,6 @@ import {buildInterviewKit} from '../ai/interviewClient';
 import {assertInterviewKitGrounded, type InterviewKit} from '../ai/interview';
 import {buildOutreachKit} from '../ai/outreachClient';
 import type {OutreachKit} from '../ai/outreach';
-import {SAMPLE_ANALYSIS} from '../ai/sampleAnalysis';
 import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
@@ -31,6 +30,7 @@ import {AccountMenu} from '../persistence/AccountMenu';
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
 type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
+const CLOUD_CONSENT_KEY = 'cvcopilot.cloudConsent.v1';
 
 export function App() {
   const [document, setDocument] = useState<CvDocument>(createBlankCv);
@@ -41,9 +41,10 @@ export function App() {
   const [copilotMode, setCopilotMode] = useState<CopilotMode>('edit');
   const [aiMode, setAiMode] = useState<'cloud' | 'local'>('cloud');
   const [cloudConsent, setCloudConsent] = useState(() => {
-    try { return localStorage.getItem('cvcopilot.cloudConsent') === 'granted'; } catch { return false; }
+    try { return localStorage.getItem(CLOUD_CONSENT_KEY) === 'granted'; } catch { return false; }
   });
   const [showConsent, setShowConsent] = useState(false);
+  const [pendingCloudAction, setPendingCloudAction] = useState<'analysis' | 'interview' | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -181,16 +182,38 @@ export function App() {
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); };
   }, [document, ready]);
 
-  const updateDocument = useCallback((next: CvDocument) => {
+  const clearCvDerivedResults = useCallback(() => {
+    setAnalysis(null);
+    setHandledSuggestions({});
+    setAnalysisError('');
+    setAnalysisNotice('');
+    setInvalidAnalysisOutput(null);
+    setInterviewKit(null);
+    setInterviewError('');
+    setOutreachKit(null);
+    setOutreachError('');
+  }, []);
+
+  const clearJobDerivedResults = useCallback(() => {
+    clearCvDerivedResults();
+    setCompanyBrief(null);
+    setResearchError('');
+  }, [clearCvDerivedResults]);
+
+  const updateDocument = useCallback((next: CvDocument, preserveAnalysis = false) => {
     setUndoStack(stack => [...stack.slice(-24), document]);
     setDocument(next);
-  }, [document]);
+    setInterviewKit(null);
+    setOutreachKit(null);
+    if (!preserveAnalysis) clearCvDerivedResults();
+  }, [clearCvDerivedResults, document]);
 
   const undo = () => {
     const previous = undoStack.at(-1);
     if (!previous) return;
     setDocument(previous);
     setUndoStack(stack => stack.slice(0, -1));
+    clearCvDerivedResults();
   };
 
   const openFieldEditor = useCallback((target: CvFieldTarget) => {
@@ -216,6 +239,7 @@ export function App() {
     setExtracting(true); setJobError('');
     try {
       const result = await extractJob(jobUrl);
+      clearJobDerivedResults();
       setJobText(result.text); setJobMeta({title: result.title, company: result.company, sourceUrl: result.url});
       if (result.company) setCompanyName(result.company);
       if (result.title) setRoleTitle(result.title);
@@ -239,18 +263,16 @@ export function App() {
       assertSuggestionsAreGrounded(document, result.suggestions);
       setAnalysis(result);
     } catch (cause) {
-      // Never dead-end the demo: if the live AI is unavailable, show a clearly
-      // labelled sample so the walkthrough completes, and invite a retry.
       const message = cause instanceof Error ? cause.message : 'Cloud analysis failed.';
-      setAnalysis(SAMPLE_ANALYSIS);
-      setAnalysisNotice(`${message} Showing a sample result — click Analyze again in a moment for your real, CV-grounded analysis.`);
+      setAnalysis(null);
+      setAnalysisError(message);
     } finally {
       setCloudBusy(false);
     }
   }, [document, jobMeta, jobText]);
 
   const requestCloudAnalysis = () => {
-    if (!cloudConsent) { setShowConsent(true); return; }
+    if (!cloudConsent) { setPendingCloudAction('analysis'); setShowConsent(true); return; }
     if (!companyName && jobMeta.company) setCompanyName(jobMeta.company);
     if (!roleTitle && jobMeta.title) setRoleTitle(jobMeta.title);
     void runCloudAnalysis();
@@ -286,7 +308,7 @@ export function App() {
         cv: document,
         job: {title: roleTitle.trim() || jobMeta.title, company: companyName.trim() || jobMeta.company, text: jobText},
         context: analysis
-          ? {fitSummary: analysis.fitSummary, gaps: analysis.gaps.map(gap => gap.requirement), companyPriorities: companyBrief?.priorities}
+          ? {fitSummary: analysis.fitSummary, gaps: analysis.gaps.map(gap => gap.requirement), companyPriorities: companyBrief?.priorities.map(priority => priority.text)}
           : undefined,
       });
       assertInterviewKitGrounded(document, kit);
@@ -297,6 +319,11 @@ export function App() {
       setInterviewBusy(false);
     }
   }, [document, roleTitle, companyName, jobText, jobMeta, analysis, companyBrief]);
+
+  const requestInterviewKit = () => {
+    if (!cloudConsent) { setPendingCloudAction('interview'); setShowConsent(true); return; }
+    void runInterviewKit();
+  };
 
   const runOutreach = useCallback(async () => {
     setOutreachBusy(true);
@@ -317,10 +344,13 @@ export function App() {
   }, [document, roleTitle, companyName, jobText, jobMeta]);
 
   const grantCloudConsent = () => {
-    try { localStorage.setItem('cvcopilot.cloudConsent', 'granted'); } catch { /* storage unavailable */ }
+    try { localStorage.setItem(CLOUD_CONSENT_KEY, 'granted'); } catch { /* storage unavailable */ }
     setCloudConsent(true);
     setShowConsent(false);
-    void runCloudAnalysis();
+    const action = pendingCloudAction;
+    setPendingCloudAction(null);
+    if (action === 'interview') void runInterviewKit();
+    else void runCloudAnalysis();
   };
 
   const runLocalAnalysis = (repair = false) => {
@@ -360,7 +390,7 @@ export function App() {
     changeActiveStage(null);
   };
 
-  const updateSettings = (settings: Partial<CvDocument['settings']>) => updateDocument({...document, settings: {...document.settings, ...settings}});
+  const updateSettings = (settings: Partial<CvDocument['settings']>) => updateDocument({...document, settings: {...document.settings, ...settings}}, true);
 
   const acceptDesignRecommendation = () => {
     if (!designRecommendation) return;
@@ -369,7 +399,7 @@ export function App() {
   };
 
   const accept = (suggestion: AiAnalysisResult['suggestions'][number]) => {
-    try { const applied = applySuggestion(document, suggestion); updateDocument(applied.document); setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'})); }
+    try { const applied = applySuggestion(document, suggestion); updateDocument(applied.document, true); setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'})); }
     catch (cause) { setAnalysisError(cause instanceof Error ? cause.message : 'Unable to apply this suggestion.'); }
   };
 
@@ -429,12 +459,12 @@ export function App() {
             <button role="tab" aria-selected={aiMode === 'local'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={14} />Private · Local</button>
           </div>
 
-          <section className="border border-white/10 bg-white/[.02] p-4"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={9} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { setJobText(event.target.value); setJobMeta({}); }} /></section>
+          <section className="border border-white/10 bg-white/[.02] p-4"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={9} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></section>
 
           {aiMode === 'cloud' ? <section className="border border-white/10 bg-white/[.02] p-4">
             <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Cloud AI</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">Recommended</p></div><span className={`mt-1 h-2 w-2 rounded-full ${cloudBusy ? 'bg-amber-400' : 'bg-emerald-400'}`} /></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Your name, email, phone, location, and links are removed before anything is sent. Employment content — roles, dates, achievements — is included so the model can compare it with the role. <button className="text-neutral-300 underline underline-offset-2 hover:text-white" onClick={() => setAiMode('local')}>Use Private local mode instead</button>.</p>
-            {showConsent && <div className="mt-4 border border-amber-400/25 bg-amber-400/5 p-3"><p className="text-xs leading-5 text-amber-100/90">This sends your CV's employment content and the job description to our cloud AI provider, which may use the content to improve its products. Your name and contact details are removed first. Continue?</p><div className="mt-3 flex gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setShowConsent(false); setAiMode('local'); }}>Switch to Private Mode</button></div></div>}
+            {showConsent && <div className="mt-4 border border-amber-400/25 bg-amber-400/5 p-3"><p className="text-xs leading-5 text-amber-100/90">This sends your CV's employment content and the job description to our cloud AI provider, which may use the content to improve its products. Your name and contact details are removed first. Continue?</p><div className="mt-3 flex gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); setAiMode('local'); }}>Switch to Private Mode</button></div></div>}
             <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={cloudBusy || jobText.trim().length < 40 || !cvHasContent} onClick={requestCloudAnalysis}>{cloudBusy ? <><LoaderCircle className="animate-spin" size={14} />Analyzing…</> : <><WandSparkles size={14} />Analyze CV</>}</button>
             {!cvHasContent && <p className="mt-2 text-[10px] leading-4 text-neutral-600">Add CV content before analysis.</p>}
           </section> : <section className="border border-white/10 bg-white/[.02] p-4">
@@ -456,22 +486,22 @@ export function App() {
             <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Globe size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Optional · cited</p><h3 id="research-title" className="mt-1 font-semibold">Research the company</h3></div></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Uses Google Search to build a cited briefing on the company and role. Sends only the company, role, and public job text — never your CV or contact details. Individual people and social profiles are excluded.</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Company</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={companyName} onChange={event => setCompanyName(event.target.value)} placeholder="Acme Inc." /></label>
-              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Role · optional</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={roleTitle} onChange={event => setRoleTitle(event.target.value)} placeholder="Frontend Engineer" /></label>
+              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Company</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={companyName} onChange={event => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setCompanyName(event.target.value); }} placeholder="Acme Inc." /></label>
+              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Role · optional</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={roleTitle} onChange={event => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setRoleTitle(event.target.value); }} placeholder="Frontend Engineer" /></label>
             </div>
             <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={researchBusy || !companyName.trim()} onClick={() => void runResearch()}>{researchBusy ? <><LoaderCircle className="animate-spin" size={14} />Researching with Google…</> : <><Search size={14} />Research this company with Google</>}</button>
             {researchError && <p className="mt-3 text-xs leading-5 text-amber-300">{researchError}</p>}
             {companyBrief && <div className="mt-4 border border-white/10 bg-black p-3">
-              <p className="text-sm leading-6 text-neutral-200">{companyBrief.summary}</p>
-              {companyBrief.priorities.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Current priorities</p><ul className="mt-2 space-y-1">{companyBrief.priorities.map((priority, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {priority}</li>)}</ul></div>}
-              {companyBrief.roleContext && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">For this role</p><p className="mt-1 text-xs leading-5 text-neutral-400">{companyBrief.roleContext}</p></div>}
+              <p className="text-sm leading-6 text-neutral-200">{companyBrief.summary.text} <ClaimCitations ids={companyBrief.summary.citationIds} sources={companyBrief.sources} /></p>
+              {companyBrief.priorities.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Current priorities</p><ul className="mt-2 space-y-1">{companyBrief.priorities.map((priority, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {priority.text} <ClaimCitations ids={priority.citationIds} sources={companyBrief.sources} /></li>)}</ul></div>}
+              {companyBrief.roleContext && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">For this role</p><p className="mt-1 text-xs leading-5 text-neutral-400">{companyBrief.roleContext.text} <ClaimCitations ids={companyBrief.roleContext.citationIds} sources={companyBrief.sources} /></p></div>}
               <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{companyBrief.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
             </div>}
           </section>}
           {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="prepare-title">
             <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Mic size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Prepare · grounded</p><h3 id="prepare-title" className="mt-1 font-semibold">Interview kit</h3></div></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Likely questions, smart questions to ask, and a 30-second pitch — drawn only from your CV. The pitch is rejected if it invents anything not in your CV.</p>
-            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={interviewBusy} onClick={() => void runInterviewKit()}>{interviewBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mic size={14} />{interviewKit ? 'Regenerate interview kit' : 'Prepare interview kit'}</>}</button>
+            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={interviewBusy} onClick={requestInterviewKit}>{interviewBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mic size={14} />{interviewKit ? 'Regenerate interview kit' : 'Prepare interview kit'}</>}</button>
             {interviewError && <p className="mt-3 text-xs leading-5 text-amber-300">{interviewError}</p>}
             {interviewKit && <div className="mt-4 space-y-4">
               <div className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">30-second pitch</p><CopyButton text={interviewKit.pitch.text} /></div><p className="mt-2 text-sm leading-6 text-neutral-200">{interviewKit.pitch.text}</p></div>
@@ -479,8 +509,8 @@ export function App() {
               <div><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Questions to ask them</p><CopyButton text={interviewKit.questionsToAsk.join('\n')} label="Copy all" /></div><ul className="mt-2 space-y-1">{interviewKit.questionsToAsk.map((question, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {question}</li>)}</ul></div>
               <div className="border-t border-white/10 pt-4">
                 <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Outreach emails</p>
-                <p className="mt-1 text-[11px] leading-4 text-neutral-600">Recruiter intro and a post-interview follow-up, with placeholders for anything not in your CV.</p>
-                <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-2.5 text-xs font-semibold disabled:opacity-30" disabled={outreachBusy} onClick={() => void runOutreach()}>{outreachBusy ? <><LoaderCircle className="animate-spin" size={14} />Drafting…</> : <><Mail size={14} />{outreachKit ? 'Regenerate emails' : 'Draft outreach emails'}</>}</button>
+                <p className="mt-1 text-[11px] leading-4 text-neutral-600">Quota-free local templates built from exact CV fields, with placeholders for anything unknown.</p>
+                <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-2.5 text-xs font-semibold disabled:opacity-30" disabled={outreachBusy} onClick={() => void runOutreach()}>{outreachBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mail size={14} />{outreachKit ? 'Regenerate templates' : 'Prepare outreach templates'}</>}</button>
                 {outreachError && <p className="mt-2 text-xs leading-5 text-amber-300">{outreachError}</p>}
                 {outreachKit && <div className="mt-3 space-y-3">{[{label: 'Recruiter intro', email: outreachKit.recruiterIntro}, {label: 'Follow-up', email: outreachKit.followUp}].map(({label, email}) => <div key={label} className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{label}</p><CopyButton text={`Subject: ${email.subject}\n\n${email.body}`} /></div><p className="mt-2 text-xs font-semibold text-neutral-200">{email.subject}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-neutral-400">{email.body}</p></div>)}</div>}
               </div>
@@ -515,6 +545,11 @@ function CopyButton({text, label}: {text: string; label?: string}) {
     window.setTimeout(() => setCopied(false), 1_500);
   };
   return <button className="focus-ring inline-flex items-center gap-1 border border-white/10 px-2 py-1 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={copy}>{copied ? <Check size={11} /> : <Copy size={11} />}{copied ? 'Copied' : label ?? 'Copy'}</button>;
+}
+
+function ClaimCitations({ids, sources}: {ids: string[]; sources: GroundedCompanyBrief['sources']}) {
+  const byId = new Map(sources.map(source => [source.id, source]));
+  return <span className="whitespace-nowrap">{ids.map((id, index) => { const source = byId.get(id); return source ? <a key={id} href={source.url} target="_blank" rel="noreferrer" aria-label={`Source: ${source.title}`} className="ml-1 text-[10px] text-neutral-300 underline underline-offset-2 hover:text-white">[{index + 1}]</a> : null; })}</span>;
 }
 
 function formatElapsed(seconds: number): string {

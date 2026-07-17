@@ -7,10 +7,10 @@ afterEach(() => vi.unstubAllGlobals());
 
 const brief: GroundedCompanyBrief = {
   company: 'Acme',
-  summary: 'Acme builds accessible tooling.',
-  priorities: ['Ship v2'],
-  roleContext: 'Values accessible React work.',
-  sources: [{title: 'Acme Newsroom', url: 'https://acme.com/news'}],
+  summary: {text: 'Acme builds accessible tooling.', citationIds: ['source-0']},
+  priorities: [{text: 'Ship v2', citationIds: ['source-0']}],
+  roleContext: {text: 'Values accessible React work.', citationIds: ['source-0']},
+  sources: [{id: 'source-0', title: 'Acme Newsroom', url: 'https://acme.com/news'}],
 };
 
 describe('researchCompany', () => {
@@ -20,7 +20,7 @@ describe('researchCompany', () => {
 
     const result = await researchCompany({company: 'Acme', role: 'Frontend Engineer', jobText: 'Build UIs.'});
 
-    expect(result.summary).toContain('accessible tooling');
+    expect(result.summary.text).toContain('accessible tooling');
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
     expect(body.operation).toBe('research-company');
     expect(body.input.company).toBe('Acme');

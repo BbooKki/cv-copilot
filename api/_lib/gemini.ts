@@ -3,7 +3,7 @@ const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models
 // flash model. Pinned `gemini-2.5-*` names are 404 for keys created in 2026.
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-latest';
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS ?? 45_000);
-const GEMINI_RETRIES = Number(process.env.GEMINI_RETRIES ?? 2);
+const GEMINI_RETRIES = Number(process.env.GEMINI_RETRIES ?? 1);
 
 export type GeminiErrorCode = 'auth' | 'quota' | 'safety' | 'network' | 'invalid-output' | 'busy' | 'unknown';
 
@@ -20,13 +20,20 @@ export class GeminiError extends Error {
 }
 
 export type GenerateOptions = {temperature?: number; maxOutputTokens?: number; json?: boolean};
-export type GroundingSource = {title: string; url: string};
+export type GroundingSource = {id: string; title: string; url: string};
+export type GroundingSupport = {startIndex: number; endIndex: number; text: string; sourceIds: string[]};
 
 type GeminiResponse = {
   candidates?: Array<{
     finishReason?: string;
     content?: {parts?: Array<{text?: string}>};
-    groundingMetadata?: {groundingChunks?: Array<{web?: {uri?: string; title?: string}}>};
+    groundingMetadata?: {
+      groundingChunks?: Array<{web?: {uri?: string; title?: string}}>;
+      groundingSupports?: Array<{
+        segment?: {startIndex?: number; endIndex?: number; text?: string};
+        groundingChunkIndices?: number[];
+      }>;
+    };
   }>;
   promptFeedback?: {blockReason?: string};
 };
@@ -46,19 +53,29 @@ export async function generateText(prompt: string, options: GenerateOptions = {}
  * text plus the real web sources the model cited. JSON mode is intentionally
  * NOT used here because responseMimeType cannot be combined with search tools.
  */
-export async function generateGrounded(prompt: string, options: GenerateOptions = {}): Promise<{text: string; sources: GroundingSource[]}> {
+export async function generateGrounded(prompt: string, options: GenerateOptions = {}): Promise<{text: string; sources: GroundingSource[]; supports: GroundingSupport[]}> {
   const response = await withRetry(() => sendRequest(buildBody(prompt, options, true)));
   const text = extractText(response);
-  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const metadata = response.candidates?.[0]?.groundingMetadata;
+  const chunks = metadata?.groundingChunks ?? [];
   const sources: GroundingSource[] = [];
-  const seen = new Set<string>();
-  for (const chunk of chunks) {
+  for (const [index, chunk] of chunks.entries()) {
     const url = chunk.web?.uri;
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    sources.push({title: (chunk.web?.title ?? url).slice(0, 200), url});
+    if (!url) continue;
+    sources.push({id: `source-${index}`, title: (chunk.web?.title ?? url).slice(0, 200), url});
   }
-  return {text, sources};
+  const sourceIds = new Set(sources.map(source => source.id));
+  const supports = (metadata?.groundingSupports ?? []).map(support => {
+    const startIndex = support.segment?.startIndex ?? 0;
+    const endIndex = support.segment?.endIndex ?? startIndex;
+    return {
+      startIndex,
+      endIndex,
+      text: support.segment?.text ?? text.slice(startIndex, endIndex),
+      sourceIds: (support.groundingChunkIndices ?? []).map(index => `source-${index}`).filter(id => sourceIds.has(id)),
+    };
+  }).filter(support => support.sourceIds.length > 0);
+  return {text, sources, supports};
 }
 
 function buildBody(prompt: string, options: GenerateOptions, grounded: boolean): Record<string, unknown> {

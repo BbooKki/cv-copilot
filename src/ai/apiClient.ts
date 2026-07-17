@@ -29,6 +29,8 @@ function normalizeCode(code: string | undefined): AiProviderErrorCode {
       return 'auth';
     case 'invalid-output':
       return 'invalid-output';
+    case 'busy':
+      return 'busy';
     default:
       return 'unknown';
   }

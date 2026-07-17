@@ -1,4 +1,4 @@
-import {interviewKitSchema, type InterviewKit, type InterviewKitRequest} from './interview';
+import {groundInterviewKit, interviewKitSchema, type InterviewKit, type InterviewKitRequest} from './interview';
 import {redactCvForCloud} from './redact';
 import {AiProviderError} from './provider';
 import {postAiOperation} from './apiClient';
@@ -12,7 +12,7 @@ export async function buildInterviewKit(request: InterviewKitRequest, signal?: A
   const redacted: InterviewKitRequest = {...request, cv: redactCvForCloud(request.cv)};
   const payload = await postAiOperation({operation: 'build-interview-kit', request: redacted}, signal);
   try {
-    return interviewKitSchema.parse(payload);
+    return groundInterviewKit(request.cv, interviewKitSchema.parse(payload));
   } catch {
     throw new AiProviderError('invalid-output', 'The interview kit could not be read. Please try again.');
   }

@@ -37,6 +37,8 @@ vi.mock('../persistence/CloudPanel', () => ({CloudPanel: () => null}));
 
 const cloudHarness = vi.hoisted(() => ({analyze: vi.fn()}));
 vi.mock('../ai/cloudClient', () => ({analyzeWithCloud: (...args: unknown[]) => cloudHarness.analyze(...args)}));
+const interviewHarness = vi.hoisted(() => ({build: vi.fn()}));
+vi.mock('../ai/interviewClient', () => ({buildInterviewKit: (...args: unknown[]) => interviewHarness.build(...args)}));
 
 describe('split tailoring flow', () => {
   beforeEach(() => {
@@ -169,6 +171,7 @@ describe('split tailoring flow', () => {
 describe('cloud analysis (default)', () => {
   beforeEach(() => {
     cloudHarness.analyze.mockReset();
+    interviewHarness.build.mockReset();
     try { localStorage.clear(); } catch { /* ignore */ }
   });
   afterEach(cleanup);
@@ -196,7 +199,7 @@ describe('cloud analysis (default)', () => {
     expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a labelled sample and a notice when the live AI is unavailable', async () => {
+  it('shows a retryable error without inserting fictional analysis when live AI is unavailable', async () => {
     cloudHarness.analyze.mockRejectedValue(new Error('The AI service is busy. Please try again in a moment.'));
 
     render(<App />);
@@ -206,7 +209,27 @@ describe('cloud analysis (default)', () => {
     fireEvent.click(screen.getByRole('button', {name: /Analyze CV/}));
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
 
-    expect(await screen.findByText(/Sample result:/)).toBeInTheDocument();
-    expect(screen.getByText(/Showing a sample result/)).toBeInTheDocument();
+    expect(await screen.findByText('The AI service is busy. Please try again in a moment.')).toBeInTheDocument();
+    expect(screen.queryByText(/Sample result:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', {name: 'Research the company'})).not.toBeInTheDocument();
+  });
+
+  it('requires cloud consent before a locally analyzed CV can be sent for interview preparation', async () => {
+    interviewHarness.build.mockRejectedValue(new Error('Stopped after consent check.'));
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.click(screen.getByRole('tab', {name: 'Private · Local'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
+    act(() => gemmaHarness.complete?.(JSON.stringify({protocolVersion: 1, fitSummary: 'Local fit is ready.', matchedRequirements: [], gaps: [], warnings: []})));
+    act(() => gemmaHarness.complete?.(JSON.stringify({protocolVersion: 1, suggestions: []})));
+    expect(await screen.findByText('Local fit is ready.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', {name: 'Cloud'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Prepare interview kit'}));
+    expect(interviewHarness.build).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+    await waitFor(() => expect(interviewHarness.build).toHaveBeenCalledTimes(1));
   });
 });

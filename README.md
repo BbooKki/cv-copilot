@@ -1,16 +1,16 @@
 # CV Copilot
 
-CV Copilot is a privacy-first, AI-assisted CV builder designed for a 24-hour hackathon. Users edit a structured CV, analyze a job description with Gemma 4 E2B running locally in the browser, review truthful suggested improvements, switch between polished templates, and export a PDF.
+CV Copilot is an AI-assisted application accelerator designed for a hackathon. Users edit a structured CV, analyze a job description with a fast cloud model or optional private on-device model, review truthful improvements, research a company with cited Google results, prepare for interviews, and export a polished PDF.
 
 ## Status
 
-The hackathon MVP is implemented. It includes a structured responsive editor, two print-ready templates, local autosave and undo, guarded job-page extraction, validated Gemma suggestions, PDF export, and optional owner-only Supabase backup.
+The hackathon MVP includes a responsive structured editor, direct preview editing, two print-ready templates, local autosave and undo, guarded job-page extraction, reviewable AI suggestions, optional cited company research, interview preparation, quota-free outreach templates, PDF export, and optional owner-only Supabase backup.
 
 ## Stack
 
 - React 19, TypeScript, Vite, and Tailwind CSS
 - Gemma 4 E2B with LiteRT-LM, WebGPU, a Web Worker, and browser caching
-- Vercel Function for guarded job-page extraction
+- Vercel Functions for guarded job-page extraction and server-side cloud AI
 - Supabase Auth and Postgres for optional cloud saving
 - Browser print CSS for PDF export
 
@@ -26,15 +26,15 @@ The hackathon MVP is implemented. It includes a structured responsive editor, tw
 - `docs/HACKATHON_SCOPE.md` — delivery scope and schedule
 - `IMPLEMENTATION_PROMPT.md` — end-to-end build prompt
 
-## Privacy promise
+## Privacy model
 
-The application works locally without an account. CV content is processed by the on-device model and leaves the browser only when the user explicitly enables cloud saving. The job URL extractor receives a URL and returns sanitized job text; it never receives the user's CV.
+The application works without an account. Cloud analysis is the recommended fast path and requires explicit consent; name and contact fields are removed before employment content and job text are sent to the provider. Private Mode runs the existing model on-device. Company research receives only public company, role, and job information. Cloud saving remains a separate explicit action.
 
 ## Run locally
 
 1. Install Node.js 20 or newer.
 2. Run `npm install`.
-3. Copy `.env.example` to `.env.local` and add optional Supabase publishable values.
+3. Copy `.env.example` to `.env.local`; add a server-only Gemini key and any optional Supabase publishable values.
 4. Run `npm run dev`.
 
 Useful checks are `npm run typecheck`, `npm test`, and `npm run build`. The Gemma artifact is about 2.01 GB and downloads only after explicit user action in a WebGPU-capable browser. It is cached locally and is never bundled with the deployment.

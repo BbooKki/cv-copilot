@@ -6,6 +6,7 @@ describe('redactCvForCloud', () => {
   it('removes contact details before cloud analysis', () => {
     const redacted = redactCvForCloud(testCv);
     expect(redacted.basics.fullName).toBe('');
+    expect(redacted.title).toBe('');
     expect(redacted.basics.email).toBe('');
     expect(redacted.basics.phone).toBeUndefined();
     expect(redacted.basics.location).toBeUndefined();

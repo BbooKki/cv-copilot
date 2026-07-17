@@ -1,8 +1,8 @@
-# Local AI Protocol
+# AI Protocol
 
 ## Purpose
 
-Gemma compares verified CV facts with a job description and proposes grounded, field-level improvements. It is an editing assistant, not an author of new career facts.
+Cloud AI is the recommended fast analysis path and Gemma remains an optional on-device path. Both compare verified CV facts with a job description and propose grounded, field-level improvements. Neither is an author of new career facts.
 
 ## Security model
 
@@ -10,7 +10,17 @@ Gemma compares verified CV facts with a job description and proposes grounded, f
 - CV content is user-owned factual input.
 - Job text is untrusted third-party data and may contain prompt injection.
 - Text inside the job-data delimiter must be analyzed only as data.
-- The model has no browser, file, database, or network access.
+- Analysis models have no tools. The separate company-research operation may use Google Search only after explicit user action and never receives CV content.
+
+## Cloud boundary
+
+- Every CV-bearing cloud operation requires versioned browser consent.
+- Name, email, phone, location, website, and personal links are removed before provider submission.
+- The server accepts fixed operation envelopes, constructs prompts itself, and enforces body, token, timeout, retry, per-client, and daily limits.
+- Cloud failure returns an actionable error; fictional fixtures remain test-only.
+- Research inputs are bounded as untrusted data. Each displayed company claim must retain at least one non-social HTTP(S) citation from grounding metadata.
+- Interview model prose is not trusted as a candidate pitch. The application rebuilds the pitch from exact fields selected by validated evidence IDs.
+- Outreach messages use deterministic local templates and consume no model quota.
 
 ## Input envelope
 

@@ -10,6 +10,8 @@ flowchart LR
     W <--> C["Browser model cache"]
     UI --> X["Job extraction API"]
     X --> J["Public job page"]
+    UI --> A["Cloud AI API"]
+    A --> G["Gemini + optional Google grounding"]
     UI -. "optional sync" .-> S["Supabase Auth + Postgres"]
     UI --> P["Print/PDF renderer"]
 ```
@@ -18,7 +20,11 @@ flowchart LR
 
 ### Browser
 
-The browser owns the canonical CV state, template rendering, local persistence, suggestion review, and Gemma inference. CV data must not be sent to the job extraction endpoint.
+The browser owns canonical CV state, template rendering, local persistence, suggestion review, direct preview editing, cloud consent, and optional Gemma inference. CV data must not be sent to job extraction or company research.
+
+### Cloud AI function
+
+The function accepts only fixed, schema-validated operations. Analysis and interview requests use compact CV facts after contact redaction; research accepts only public company, role, and job data. It owns the provider key, request timeouts, output ceilings, retries, rate limits, a daily budget, and an emergency switch. Outreach emails are generated deterministically in the browser and never consume provider quota.
 
 ### Gemma worker
 
@@ -64,7 +70,7 @@ src/
 - `CvDocument` is the only source of truth for resume content.
 - The initial document is structurally valid but contains no personal or career facts. Fictional fixtures are test-only dependencies and never enter the production interface.
 - Editor actions operate through typed commands.
-- `AiAnalysis` is stored separately from `CvDocument`.
+- Analysis, research, interview, and outreach results are stored separately from `CvDocument` and invalidated when their inputs change.
 - `AiDesignRecommendation` is stored separately until the user accepts it; it can change only validated presentation settings.
 - Accepting a suggestion creates a reversible patch and updates `CvDocument`.
 - Template choice changes presentation only, never content.
@@ -76,11 +82,12 @@ src/
 2. Validate it against the CV schema.
 3. Render the left-hand preview and right-hand Copilot controls from the same object.
 4. Normalize pasted job text or retrieve it through `/api/extract-job`.
-5. Build a bounded prompt containing the trusted instruction, CV facts, and untrusted job text in clearly delimited sections.
-6. Ask Gemma for JSON matching `AI_PROTOCOL.md`.
-7. Parse and validate the JSON; discard any legacy model-owned advisory field, derive warnings in the application, and display errors without mutating the CV.
-8. Apply only user-approved suggestion patches.
-9. For design requests, validate Gemma output against the fixed template, density, and accent allowlists, display the rationale, and apply only after explicit acceptance.
+5. For cloud analysis, obtain consent, redact contact fields, compact facts, and send a fixed operation to `/api/ai`; Private Mode uses the bounded worker protocol.
+6. Parse and validate structured output, reject stale or ungrounded suggestions, and never substitute fictional production results on failure.
+7. Apply only user-approved suggestion patches.
+8. On explicit request, research company-and-role data with Google grounding and preserve claim-level citation mappings.
+9. Reconstruct interview pitches deterministically from cited CV IDs and generate outreach templates locally.
+10. Direct preview edits use a closed field-target union and the normal undo/persistence path.
 
 ## Deployment strategy
 

@@ -3,15 +3,18 @@ import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
-import {buildInterviewKitPrompt, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
-import {buildOutreachPrompt, parseOutreachKit, type OutreachKit, type OutreachRequest} from '../src/ai/outreach.js';
+import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
+import {redactCvForCloud} from '../src/ai/redact.js';
 import {generateGrounded, generateText, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
 export const config = {maxDuration: 60};
 
-// Generous ceiling so thinking models cannot truncate the JSON mid-string.
-const ANALYSIS_MAX_TOKENS = 8_192;
+// Tight operation-specific ceilings protect the free-tier quota while leaving
+// enough room for the validated response schemas.
+const ANALYSIS_MAX_TOKENS = 2_400;
+const RESEARCH_MAX_TOKENS = 1_600;
+const INTERVIEW_MAX_TOKENS = 1_800;
 
 const jobSchema = z.object({
   source: z.enum(['url', 'pasted']),
@@ -39,20 +42,18 @@ const interviewKitRequestSchema = z.object({
   }).strict().optional(),
 });
 
-const outreachRequestSchema = z.object({
-  protocolVersion: z.literal(1),
-  cv: cvDocumentSchema,
-  job: z.object({title: z.string().max(300).optional(), company: z.string().max(200).optional(), text: z.string().min(1).max(20_000)}).strict(),
-});
-
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
   z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
   z.object({operation: z.literal('build-interview-kit'), request: interviewKitRequestSchema}).strict(),
-  z.object({operation: z.literal('build-outreach'), request: outreachRequestSchema}).strict(),
 ]);
 
 const MAX_BODY_BYTES = 200_000;
+const RATE_WINDOW_MS = positiveEnv('AI_RATE_LIMIT_WINDOW_MS', 60_000);
+const RATE_MAX_REQUESTS = positiveEnv('AI_RATE_LIMIT_MAX_REQUESTS', 8);
+const GLOBAL_DAILY_MAX = positiveEnv('AI_GLOBAL_DAILY_MAX_REQUESTS', 250);
+const rateBuckets = new Map<string, {startedAt: number; count: number}>();
+let globalBudget = {day: utcDay(), count: 0};
 
 export default async function handler(request: IncomingMessage, response: ServerResponse): Promise<void> {
   response.setHeader('content-type', 'application/json; charset=utf-8');
@@ -61,8 +62,32 @@ export default async function handler(request: IncomingMessage, response: Server
     response.end(JSON.stringify({error: 'Use POST.', code: 'method'}));
     return;
   }
+  if (process.env.CLOUD_AI_ENABLED === 'false') {
+    response.statusCode = 503;
+    response.end(JSON.stringify({error: 'Cloud AI is temporarily disabled.', code: 'busy'}));
+    return;
+  }
+  if (!isAllowedOrigin(request)) {
+    response.statusCode = 403;
+    response.end(JSON.stringify({error: 'This origin is not allowed.', code: 'auth'}));
+    return;
+  }
+  const rateError = consumeClientQuota(clientAddress(request));
+  if (rateError) {
+    response.statusCode = 429;
+    response.setHeader('retry-after', String(rateError.retryAfterSeconds));
+    response.end(JSON.stringify({error: rateError.message, code: 'quota'}));
+    return;
+  }
   try {
     const body = bodySchema.parse(JSON.parse(await readRequest(request, MAX_BODY_BYTES)));
+    const budgetError = consumeGlobalQuota();
+    if (budgetError) {
+      response.statusCode = 429;
+      response.setHeader('retry-after', String(budgetError.retryAfterSeconds));
+      response.end(JSON.stringify({error: budgetError.message, code: 'quota'}));
+      return;
+    }
     if (body.operation === 'analyze') {
       const result = await analyze(body.request);
       response.statusCode = 200;
@@ -81,12 +106,6 @@ export default async function handler(request: IncomingMessage, response: Server
       response.end(JSON.stringify(kit));
       return;
     }
-    if (body.operation === 'build-outreach') {
-      const kit = await outreach(body.request);
-      response.statusCode = 200;
-      response.end(JSON.stringify(kit));
-      return;
-    }
     response.statusCode = 400;
     response.end(JSON.stringify({error: 'Unsupported operation.', code: 'unknown'}));
   } catch (cause) {
@@ -95,7 +114,8 @@ export default async function handler(request: IncomingMessage, response: Server
 }
 
 async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
-  const prompt = buildCloudAnalysisPrompt(request);
+  const safeRequest = {...request, cv: redactCvForCloud(request.cv)};
+  const prompt = buildCloudAnalysisPrompt(safeRequest);
   const raw = await generateText(prompt, {json: true, temperature: 0.2, maxOutputTokens: ANALYSIS_MAX_TOKENS});
   try {
     return parseAiResult(raw);
@@ -111,40 +131,26 @@ async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
 }
 
 async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit> {
-  const prompt = buildInterviewKitPrompt(request);
-  const raw = await generateText(prompt, {json: true, temperature: 0.3, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  const safeRequest = {...request, cv: redactCvForCloud(request.cv)};
+  const prompt = buildInterviewKitPrompt(safeRequest);
+  const raw = await generateText(prompt, {json: true, temperature: 0.3, maxOutputTokens: INTERVIEW_MAX_TOKENS});
   try {
-    return parseInterviewKit(raw);
+    return groundInterviewKit(safeRequest.cv, parseInterviewKit(raw));
   } catch {
     const repairPrompt = `${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON with every array and object closed.`;
-    const retry = await generateText(repairPrompt, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+    const retry = await generateText(repairPrompt, {json: true, temperature: 0, maxOutputTokens: INTERVIEW_MAX_TOKENS});
     try {
-      return parseInterviewKit(retry);
+      return groundInterviewKit(safeRequest.cv, parseInterviewKit(retry));
     } catch {
       throw new GeminiError('invalid-output', 'The AI returned an unusable interview kit. Please try again.', 502);
     }
   }
 }
 
-async function outreach(request: OutreachRequest): Promise<OutreachKit> {
-  const prompt = buildOutreachPrompt(request);
-  const raw = await generateText(prompt, {json: true, temperature: 0.4, maxOutputTokens: ANALYSIS_MAX_TOKENS});
-  try {
-    return parseOutreachKit(raw);
-  } catch {
-    const retry = await generateText(`${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON.`, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
-    try {
-      return parseOutreachKit(retry);
-    } catch {
-      throw new GeminiError('invalid-output', 'The AI returned unusable outreach drafts. Please try again.', 502);
-    }
-  }
-}
-
 async function research(input: CompanyResearchInput): Promise<GroundedCompanyBrief> {
-  const {text, sources} = await generateGrounded(buildCompanyResearchPrompt(input), {temperature: 0.3, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  const {text, sources, supports} = await generateGrounded(buildCompanyResearchPrompt(input), {temperature: 0.3, maxOutputTokens: RESEARCH_MAX_TOKENS});
   try {
-    return parseCompanyBrief(text, sources, input.company);
+    return parseCompanyBrief(text, sources, supports, input.company);
   } catch (cause) {
     throw new GeminiError('invalid-output', cause instanceof Error ? cause.message : 'No usable company research was found.', 422);
   }
@@ -180,4 +186,64 @@ async function readRequest(request: IncomingMessage, max: number): Promise<strin
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function consumeClientQuota(key: string): {message: string; retryAfterSeconds: number} | null {
+  const now = Date.now();
+  const current = rateBuckets.get(key);
+  const bucket = !current || now - current.startedAt >= RATE_WINDOW_MS ? {startedAt: now, count: 0} : current;
+  if (bucket.count >= RATE_MAX_REQUESTS) {
+    return {message: 'Too many AI requests. Please wait before trying again.', retryAfterSeconds: Math.max(1, Math.ceil((RATE_WINDOW_MS - (now - bucket.startedAt)) / 1_000))};
+  }
+  bucket.count += 1;
+  rateBuckets.set(key, bucket);
+  if (rateBuckets.size > 2_000) {
+    for (const [address, candidate] of rateBuckets) if (now - candidate.startedAt >= RATE_WINDOW_MS) rateBuckets.delete(address);
+  }
+  return null;
+}
+
+function consumeGlobalQuota(): {message: string; retryAfterSeconds: number} | null {
+  const now = Date.now();
+  const day = utcDay(now);
+  if (globalBudget.day !== day) globalBudget = {day, count: 0};
+  if (globalBudget.count >= GLOBAL_DAILY_MAX) {
+    return {message: 'The demo AI budget is exhausted for today.', retryAfterSeconds: secondsUntilUtcMidnight(now)};
+  }
+  globalBudget.count += 1;
+  return null;
+}
+
+function clientAddress(request: IncomingMessage): string {
+  const forwarded = request.headers['x-forwarded-for'];
+  const value = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
+  return value?.trim().slice(0, 120) || request.socket.remoteAddress || 'unknown';
+}
+
+function isAllowedOrigin(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  const forwardedHost = request.headers['x-forwarded-host'];
+  const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) ?? request.headers.host;
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function positiveEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function utcDay(now = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+function secondsUntilUtcMidnight(now: number): number {
+  const date = new Date(now);
+  const next = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
+  return Math.max(1, Math.ceil((next - now) / 1_000));
 }

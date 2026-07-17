@@ -1,20 +1,20 @@
 import {describe, expect, it} from 'vitest';
-import {buildOutreachPrompt, parseOutreachKit} from './outreach';
+import {buildVerifiedOutreachKit, parseOutreachKit} from './outreach';
 import {testCv} from '../cv/testFixture';
 
 describe('outreach kit', () => {
-  it('builds a prompt with CV facts, placeholders guidance, and the job envelope', () => {
-    const prompt = buildOutreachPrompt({protocolVersion: 1, cv: testCv, job: {title: 'Frontend Engineer', company: 'Acme', text: 'Build accessible React apps.'}});
-    expect(prompt).toContain('Frontend Engineer');
-    expect(prompt).toContain('Acme');
-    expect(prompt).toMatch(/bracketed placeholders/i);
-    expect(prompt).toContain('CV_FACTS_BEGIN');
+  it('builds truthful drafts locally from exact CV facts', () => {
+    const kit = buildVerifiedOutreachKit({protocolVersion: 1, cv: testCv, job: {title: 'Frontend Engineer', company: 'Acme', text: 'Build accessible React apps.'}});
+    expect(kit.recruiterIntro.subject).toContain('Frontend Engineer');
+    expect(kit.recruiterIntro.subject).toContain('Acme');
+    expect(kit.recruiterIntro.body).toContain('Product Engineer at Northstar Labs');
+    expect(kit.recruiterIntro.body).toContain('[Hiring Manager]');
   });
 
   it('falls back to bracket placeholders when company/role are absent', () => {
-    const prompt = buildOutreachPrompt({protocolVersion: 1, cv: testCv, job: {text: 'A role.'}});
-    expect(prompt).toContain('[Company]');
-    expect(prompt).toContain('[Role]');
+    const kit = buildVerifiedOutreachKit({protocolVersion: 1, cv: testCv, job: {text: 'A role.'}});
+    expect(kit.recruiterIntro.subject).toContain('[Company]');
+    expect(kit.recruiterIntro.subject).toContain('[Role]');
   });
 
   it('parses a valid outreach kit', () => {

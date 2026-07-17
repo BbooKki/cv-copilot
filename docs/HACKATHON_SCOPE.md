@@ -6,9 +6,12 @@
 - Two polished templates using one CV schema
 - Job-description paste input
 - Guarded job URL extraction with pasted-text fallback
-- Existing Gemma 4 E2B browser runtime adapted to this project
+- Consent-gated cloud analysis with optional Gemma Private Mode
 - Structured job-fit analysis and field-level suggestions
 - Accept, reject, and undo suggestion workflow
+- Optional cited company-and-role research with no CV data
+- Interview questions and a deterministic CV-derived pitch
+- Direct preview editing for narrative fields
 - Print/PDF export
 - Responsive, accessible UI
 - Production build and HTTPS smoke test
@@ -19,23 +22,25 @@
 - Owner-only cloud save/load/update/delete
 - Model cache management and resource warnings
 - Deterministic fictional test fixtures that are not exposed in the production interface
+- Server-side AI rate limits, daily budget, and emergency kill switch
 
 ## Could ship
 
 - Reordering with drag handles
 - Theme accent selection
-- Analysis history
+- Quota-free deterministic outreach templates
 - Shareable read-only link
 
 ## Will not ship
 
 - Freeform canvas editing
 - More than two templates
-- Autonomous internet search
+- Autonomous internet search without explicit user approval
 - DOCX import/export
 - Payments
 - Collaboration
 - Public profiles
+- Employee discovery or contact inference
 - Cover-letter generation
 
 ## Suggested schedule
@@ -62,7 +67,7 @@
 
 ## Demo preparation
 
-- Cache the model on the demo device before presenting.
+- Verify cloud quota and keep Private Mode cached as a fallback.
 - Keep a pasted job description ready if the live URL blocks extraction.
 - Keep a known-good fictional analysis fixture in tests, not in the production interface.
 - Verify the deployed origin in the exact browser used for judging.

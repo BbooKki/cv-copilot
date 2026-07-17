@@ -299,7 +299,7 @@ function takeWithinBudget<T>(items: T[], maxCharacters: number): T[] {
   return included;
 }
 
-const PROMPT_BOUNDARY_PATTERN = /\b(?:CV_FACTS|JOB_DATA|VALIDATED_FIT_ANALYSIS|USER_DIRECTION)_(?:BEGIN|END)\b/gi;
+const PROMPT_BOUNDARY_PATTERN = /\b(?:CV_FACTS|JOB_DATA|VALIDATED_FIT_ANALYSIS|USER_DIRECTION|RESEARCH_DATA|CONTEXT_DATA)_(?:BEGIN|END)\b/gi;
 
 export function buildUntrustedPromptEnvelope(text: string, maxCharacters: number): string {
   if (maxCharacters < JSON.stringify({untrustedText: ''}).length) throw new Error('Prompt envelope budget is too small.');

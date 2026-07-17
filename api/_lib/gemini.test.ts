@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {generateText, GeminiError} from './gemini';
+import {generateGrounded, generateText, GeminiError} from './gemini';
 
 const originalKey = process.env.GEMINI_API_KEY;
 
@@ -52,5 +52,26 @@ describe('generateText', () => {
   it('treats a safety block as a safety error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({promptFeedback: {blockReason: 'SAFETY'}}), {status: 200})));
     await expect(generateText('prompt')).rejects.toMatchObject({code: 'safety'});
+  });
+});
+
+describe('generateGrounded', () => {
+  it('preserves source IDs and claim-level grounding supports', async () => {
+    const text = '{"summary":"Acme ships accessible tools."}';
+    const startIndex = text.indexOf('Acme ships accessible tools.');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{
+        content: {parts: [{text}]},
+        groundingMetadata: {
+          groundingChunks: [{web: {uri: 'https://acme.example/news', title: 'Acme News'}}],
+          groundingSupports: [{segment: {startIndex, endIndex: startIndex + 28, text: 'Acme ships accessible tools.'}, groundingChunkIndices: [0]}],
+        },
+      }],
+    }), {status: 200})));
+
+    const result = await generateGrounded('prompt');
+
+    expect(result.sources).toEqual([{id: 'source-0', title: 'Acme News', url: 'https://acme.example/news'}]);
+    expect(result.supports[0]?.sourceIds).toEqual(['source-0']);
   });
 });

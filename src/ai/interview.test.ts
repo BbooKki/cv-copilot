@@ -1,12 +1,12 @@
 import {describe, expect, it} from 'vitest';
-import {assertInterviewKitGrounded, buildInterviewKitPrompt, parseInterviewKit, type InterviewKit} from './interview';
+import {assertInterviewKitGrounded, buildInterviewKitPrompt, buildVerifiedPitch, groundInterviewKit, parseInterviewKit, type InterviewKit} from './interview';
 import {testCv} from '../cv/testFixture';
 
 const validKit: InterviewKit = {
   protocolVersion: 1,
   questions: [{question: 'Tell me about a real-time feature you built.', rationale: 'The role needs real-time dashboard experience.'}],
   questionsToAsk: ['What does success look like in the first 90 days?'],
-  pitch: {text: 'I am a product engineer who built accessible dashboards.', evidenceIds: ['exp-northstar']},
+  pitch: {text: buildVerifiedPitch(testCv, ['exp-northstar']), evidenceIds: ['exp-northstar']},
 };
 
 describe('interview kit', () => {
@@ -38,6 +38,12 @@ describe('interview kit', () => {
 
   it('rejects a pitch that introduces an unknown number', () => {
     const kit = {...validKit, pitch: {text: 'I increased revenue by 999 percent.', evidenceIds: ['exp-northstar']}};
-    expect(() => assertInterviewKitGrounded(testCv, kit)).toThrow(/number that is not present/);
+    expect(() => assertInterviewKitGrounded(testCv, kit)).toThrow(/does not match its supporting CV evidence/);
+  });
+
+  it('replaces model prose with deterministic CV-derived text', () => {
+    const grounded = groundInterviewKit(testCv, {...validKit, pitch: {text: 'Invented prose.', evidenceIds: ['hl-dashboard']}});
+    expect(grounded.pitch.text).toContain(testCv.experience[0].highlights[1].text);
+    expect(grounded.pitch.text).not.toContain('Invented prose');
   });
 });
