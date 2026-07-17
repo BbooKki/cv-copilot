@@ -1,9 +1,10 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Cloud, Download, FileText, HardDrive, LoaderCircle, RotateCcw, Sparkles, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Sparkles, Square, WandSparkles, X} from 'lucide-react';
 import {aiAnalysisResultSchema, buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
 import {applySuggestion, createDemoAnalysis, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
 import {sampleCv, sampleJobText} from '../cv/sample';
+import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
 import {GEMMA_MODEL_BYTES} from '../gemma/protocol';
 import {useGemma} from '../gemma/useGemma';
@@ -12,16 +13,18 @@ import {localResumeRepository} from '../persistence/localResumeRepository';
 import {CvPreview} from '../templates/CvPreview';
 import {CloudPanel} from '../persistence/CloudPanel';
 
-type View = 'edit' | 'preview' | 'ai';
+type View = 'cv' | 'copilot';
+type CopilotMode = 'edit' | 'tailor';
 
 export function App() {
-  const [document, setDocument] = useState<CvDocument>(sampleCv);
+  const [document, setDocument] = useState<CvDocument>(createBlankCv);
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
   const [undoStack, setUndoStack] = useState<CvDocument[]>([]);
-  const [view, setView] = useState<View>('edit');
+  const [view, setView] = useState<View>('copilot');
+  const [copilotMode, setCopilotMode] = useState<CopilotMode>('edit');
   const [jobUrl, setJobUrl] = useState('');
-  const [jobText, setJobText] = useState(sampleJobText);
+  const [jobText, setJobText] = useState('');
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
   const [extracting, setExtracting] = useState(false);
   const [jobError, setJobError] = useState('');
@@ -35,7 +38,8 @@ export function App() {
       setAnalysis(parseAiResult(raw));
       setHandledSuggestions({});
       setAnalysisError('');
-      setView('ai');
+      setCopilotMode('tailor');
+      setView('copilot');
     } catch (cause) {
       setAnalysisError(cause instanceof Error ? `The local model returned invalid structured output: ${cause.message}` : 'Unable to validate the local model output.');
     }
@@ -85,7 +89,15 @@ export function App() {
     gemma.generate(buildAnalysisPrompt(request));
   };
 
-  const runDemo = () => { setAnalysis(aiAnalysisResultSchema.parse(createDemoAnalysis(document))); setHandledSuggestions({}); setAnalysisError(''); setView('ai'); };
+  const runDemo = () => { setAnalysis(aiAnalysisResultSchema.parse(createDemoAnalysis(document))); setHandledSuggestions({}); setAnalysisError(''); setCopilotMode('tailor'); setView('copilot'); };
+
+  const loadExample = () => {
+    updateDocument(structuredClone(sampleCv));
+    setJobText(sampleJobText);
+    setJobMeta({});
+    setAnalysis(null);
+    setHandledSuggestions({});
+  };
 
   const accept = (suggestion: AiAnalysisResult['suggestions'][number]) => {
     try { const applied = applySuggestion(document, suggestion); updateDocument(applied.document); setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'})); }
@@ -94,6 +106,7 @@ export function App() {
 
   const formatBytes = (bytes: number) => `${(bytes / 1_000_000_000).toFixed(2)} GB`;
   const progress = Math.min(100, (gemma.progress.received / Math.max(gemma.progress.total, 1)) * 100);
+  const cvHasContent = hasCvContent(document);
 
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
@@ -102,26 +115,33 @@ export function App() {
         <div className="hidden items-center gap-2 md:flex">
           <StatusPill icon={<HardDrive size={12} />} label={saveState === 'saving' ? 'Saving locally' : saveState === 'error' ? 'Save failed' : 'Saved locally'} tone={saveState === 'error' ? 'error' : 'neutral'} />
           <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
-          <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
+          <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-30" disabled={!cvHasContent} onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
         </div>
       </div>
-      <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 xl:hidden" aria-label="Workspace views">{(['edit', 'preview', 'ai'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item === 'ai' ? 'AI review' : item}</button>)}</nav>
+      <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 xl:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
     </header>
 
-    <div className="print-root mx-auto grid max-w-[1800px] xl:grid-cols-[minmax(330px,400px)_minmax(520px,1fr)_minmax(310px,360px)]">
-      <section className={`no-print min-h-[calc(100vh-65px)] border-r border-white/10 bg-black p-4 md:p-5 ${view !== 'edit' ? 'hidden xl:block' : ''}`} aria-label="CV editor">
-        <div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Structured editor</p><h2 className="mt-1 font-display text-xl font-semibold">Build your story</h2></div><button className="focus-ring p-2 text-neutral-500 hover:text-white md:hidden" onClick={undo} disabled={!undoStack.length}><RotateCcw size={18} /></button></div>
-        <CvEditor document={document} onChange={updateDocument} />
-      </section>
-
-      <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:px-10 ${view !== 'preview' ? 'hidden xl:block' : ''}`} aria-label="CV preview workspace">
+    <div className="print-root mx-auto grid max-w-[1800px] xl:grid-cols-[minmax(0,1fr)_minmax(390px,40%)]">
+      <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:px-10 ${view !== 'cv' ? 'hidden xl:block' : ''}`} aria-label="CV preview workspace">
         <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports.</p></div><div className="flex items-center gap-2"><select aria-label="Template" className="focus-ring border border-white/10 bg-black px-3 py-2 text-xs text-neutral-300" value={document.settings.templateId} onChange={event => updateDocument({...document, settings: {...document.settings, templateId: event.target.value as 'classic' | 'modern'}})}><option value="modern">Modern Mono</option><option value="classic">Classic ATS</option></select><select aria-label="Page size" className="focus-ring border border-white/10 bg-black px-3 py-2 text-xs text-neutral-300" value={document.settings.pageSize} onChange={event => updateDocument({...document, settings: {...document.settings, pageSize: event.target.value as 'A4' | 'letter'}})}><option value="A4">A4</option><option value="letter">Letter</option></select><input aria-label="Accent color" type="color" className="focus-ring h-9 w-10 border border-white/10 bg-black p-1" value={document.settings.accentColor} onChange={event => updateDocument({...document, settings: {...document.settings, accentColor: event.target.value}})} /></div></div>
-        <div className="paper-frame"><CvPreview document={document} /></div>
+        <div className="paper-frame">{cvHasContent ? <CvPreview document={document} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
       </section>
 
-      <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black p-4 md:p-5 ${view !== 'ai' ? 'hidden xl:block' : ''}`} aria-label="AI review">
-        <div className="mb-5"><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Local intelligence</p><h2 className="mt-1 font-display text-xl font-semibold">Tailor with evidence</h2><p className="mt-2 text-sm leading-6 text-neutral-500">Job pages are retrieved separately. Your CV is analyzed by Gemma on this device.</p></div>
-        <div className="space-y-4">
+      <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black xl:h-[calc(100vh-65px)] xl:overflow-y-auto ${view !== 'copilot' ? 'hidden xl:block' : ''}`} aria-label="CV Copilot">
+        <div className="sticky top-0 z-10 border-b border-white/10 bg-black/95 p-4 backdrop-blur-xl md:p-5">
+          <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private assistant</p><h2 className="mt-1 font-display text-xl font-semibold">CV Copilot</h2></div><button className="focus-ring p-2 text-neutral-500 hover:text-white md:hidden" onClick={undo} disabled={!undoStack.length}><RotateCcw size={18} /></button></div>
+          <div className="mt-4 grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
+            <button role="tab" aria-selected={copilotMode === 'edit'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'edit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('edit')}><PenLine size={14} />Edit CV</button>
+            <button role="tab" aria-selected={copilotMode === 'tailor'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'tailor' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('tailor')}><MessageSquare size={14} />Tailor</button>
+          </div>
+        </div>
+
+        {copilotMode === 'edit' ? <div className="p-4 md:p-5">
+          <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
+          {!cvHasContent && <button className="focus-ring mb-5 w-full border border-white/10 px-3 py-3 text-xs text-neutral-400 hover:border-white/30 hover:text-white" onClick={loadExample}><Sparkles size={13} className="mr-1.5 inline" />Load example CV</button>}
+          <CvEditor document={document} onChange={updateDocument} />
+        </div> : <div className="space-y-4 p-4 md:p-5">
+          <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
           <section className="border border-white/10 bg-white/[.02] p-4"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={9} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { setJobText(event.target.value); setJobMeta({}); }} /></section>
 
           <section className="border border-white/10 bg-white/[.02] p-4">
@@ -130,17 +150,17 @@ export function App() {
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div><button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
             {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
             {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The editor and deterministic demo remain available.</p>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40} onClick={runLocalAnalysis}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}<button className="focus-ring text-xs text-neutral-500 hover:text-white" onClick={runDemo}><Sparkles size={13} className="mr-1 inline" />Run instant demo analysis</button>{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
+            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={runLocalAnalysis}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}<button className="focus-ring text-xs text-neutral-500 hover:text-white disabled:opacity-30" disabled={!cvHasContent} onClick={runDemo}><Sparkles size={13} className="mr-1 inline" />Run instant demo analysis</button>{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
           </section>
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
           {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
           <CloudPanel document={document} onLoad={updateDocument} />
-        </div>
+        </div>}
       </aside>
     </div>
 
-    <div className="no-print fixed bottom-4 right-4 flex gap-2 md:hidden"><button aria-label="Export PDF" className="focus-ring grid h-12 w-12 place-items-center bg-white text-black shadow-2xl" onClick={() => window.print()}><Download size={18} /></button></div>
+    <div className="no-print fixed bottom-4 right-4 flex gap-2 md:hidden"><button aria-label="Export PDF" disabled={!cvHasContent} className="focus-ring grid h-12 w-12 place-items-center bg-white text-black shadow-2xl disabled:opacity-30" onClick={() => window.print()}><Download size={18} /></button></div>
   </main>;
 }
 
@@ -150,4 +170,8 @@ function AnalysisPanel({analysis, document, handled, onAccept, onReject}: {analy
 
 function StatusPill({icon, label, tone}: {icon: React.ReactNode; label: string; tone: 'neutral' | 'error'}) {
   return <span className={`flex items-center gap-1.5 border px-2.5 py-2 font-mono text-[9px] uppercase tracking-wider ${tone === 'error' ? 'border-red-400/20 text-red-400' : 'border-white/10 text-neutral-500'}`}>{icon}{label}</span>;
+}
+
+function EmptyCvPreview({pageSize}: {pageSize: CvDocument['settings']['pageSize']}) {
+  return <div className="paper grid place-items-center p-[20mm] text-center" data-page-size={pageSize} aria-label="Empty CV preview"><div className="no-print max-w-[78mm]"><FileText className="mx-auto text-neutral-300" size={30} strokeWidth={1.25} /><p className="mt-5 text-[13pt] font-semibold text-neutral-800">Your CV will appear here</p><p className="mt-2 text-[9.5pt] leading-6 text-neutral-500">Add your details in the Copilot pane. Nothing is filled in or invented for you.</p></div></div>;
 }

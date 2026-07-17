@@ -84,7 +84,7 @@ export type CvDocument = {
 ## Validation rules
 
 - IDs are non-empty and unique within their collection.
-- `fullName`, experience company/role, education institution/qualification, project name, and skill group name cannot be blank when present.
+- Drafts may temporarily contain blank required fields so a newly added entry never needs fake placeholder data. Blank draft entries are omitted from the preview and from AI input; product actions can require meaningful CV content without inventing missing values.
 - URLs allow only `https:` and `http:` in user-facing links.
 - Email is syntactically validated but not verified.
 - Highlight text is plain text, not executable HTML.

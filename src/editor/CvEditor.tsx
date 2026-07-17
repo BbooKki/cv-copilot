@@ -36,7 +36,7 @@ export function CvEditor({document, onChange}: Props) {
         </div>
         <label className="flex items-center gap-2 text-xs text-neutral-400"><input type="checkbox" checked={item.current} onChange={event => update(draft => { draft.experience[index].current = event.target.checked; })} /> Current role</label>
         {item.highlights.map((highlight, highlightIndex) => <div key={highlight.id} className="flex items-start gap-2"><textarea aria-label={`Highlight ${highlightIndex + 1}`} className="min-h-20 flex-1 border border-white/10 bg-black p-3 text-sm leading-6 text-white outline-none focus:border-white/40" value={highlight.text} onChange={event => update(draft => { draft.experience[index].highlights[highlightIndex].text = event.target.value; })} /><button aria-label="Delete highlight" className="focus-ring p-2 text-neutral-600 hover:text-red-400" onClick={() => update(draft => { draft.experience[index].highlights.splice(highlightIndex, 1); })}><Trash2 size={15} /></button></div>)}
-        <button className="focus-ring text-left font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.experience[index].highlights.push({id: makeId('highlight'), text: 'Describe a grounded result or responsibility.'}); })}>+ Add highlight</button>
+        <button className="focus-ring text-left font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.experience[index].highlights.push({id: makeId('highlight'), text: ''}); })}>+ Add highlight</button>
       </RepeatCard>)}
     </EditorSection>
 
@@ -47,7 +47,7 @@ export function CvEditor({document, onChange}: Props) {
         <InputField label="Project URL" value={project.url ?? ''} onChange={event => update(draft => { draft.projects[index].url = event.target.value; })} />
         <InputField label="Technologies (comma separated)" value={project.technologies.join(', ')} onChange={event => update(draft => { draft.projects[index].technologies = splitList(event.target.value); })} />
         {project.highlights.map((highlight, highlightIndex) => <div key={highlight.id} className="flex items-start gap-2"><textarea aria-label={`Project highlight ${highlightIndex + 1}`} className="min-h-20 flex-1 border border-white/10 bg-black p-3 text-sm leading-6 text-white outline-none focus:border-white/40" value={highlight.text} onChange={event => update(draft => { draft.projects[index].highlights[highlightIndex].text = event.target.value; })} /><button aria-label="Delete project highlight" className="focus-ring p-2 text-neutral-600 hover:text-red-400" onClick={() => update(draft => { draft.projects[index].highlights.splice(highlightIndex, 1); })}><Trash2 size={15} /></button></div>)}
-        <button className="focus-ring text-left font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.projects[index].highlights.push({id: makeId('highlight'), text: 'Describe a grounded project result.'}); })}>+ Add highlight</button>
+        <button className="focus-ring text-left font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.projects[index].highlights.push({id: makeId('highlight'), text: ''}); })}>+ Add highlight</button>
       </RepeatCard>)}
     </EditorSection>
 
@@ -58,7 +58,7 @@ export function CvEditor({document, onChange}: Props) {
     <EditorSection title="Education & languages" eyebrow="05 · Background" action={<button className="focus-ring flex items-center gap-1 text-xs text-neutral-300 hover:text-white" onClick={() => update(draft => { draft.education.push(newEducation()); })}><Plus size={14} /> Education</button>}>
       {document.education.map((item, index) => <RepeatCard key={item.id} title={item.qualification || 'New education'} index={index} count={document.education.length} onUp={() => update(draft => move(draft.education, index, -1))} onDown={() => update(draft => move(draft.education, index, 1))} onDelete={() => update(draft => { draft.education.splice(index, 1); })}><div className="grid gap-3 sm:grid-cols-2"><InputField label="Qualification" value={item.qualification} onChange={event => update(draft => { draft.education[index].qualification = event.target.value; })} /><InputField label="Institution" value={item.institution} onChange={event => update(draft => { draft.education[index].institution = event.target.value; })} /><InputField label="Field" value={item.field ?? ''} onChange={event => update(draft => { draft.education[index].field = event.target.value; })} /><InputField label="Location" value={item.location ?? ''} onChange={event => update(draft => { draft.education[index].location = event.target.value; })} /><InputField label="Start" value={item.startDate ?? ''} onChange={event => update(draft => { draft.education[index].startDate = event.target.value; })} /><InputField label="End" value={item.endDate ?? ''} onChange={event => update(draft => { draft.education[index].endDate = event.target.value; })} /></div></RepeatCard>)}
       <div className="mt-5 space-y-3">{document.languages.map((item, index) => <div key={item.id} className="grid grid-cols-[1fr_1.5fr_auto] items-end gap-2"><InputField label="Language" value={item.language} onChange={event => update(draft => { draft.languages[index].language = event.target.value; })} /><InputField label="Proficiency" value={item.proficiency ?? ''} onChange={event => update(draft => { draft.languages[index].proficiency = event.target.value; })} /><button aria-label={`Delete ${item.language}`} className="focus-ring mb-1 p-2 text-neutral-600 hover:text-red-400" onClick={() => update(draft => { draft.languages.splice(index, 1); })}><Trash2 size={15} /></button></div>)}</div>
-      <button className="focus-ring font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.languages.push({id: makeId('language'), language: 'Language', proficiency: ''}); })}>+ Add language</button>
+      <button className="focus-ring font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white" onClick={() => update(draft => { draft.languages.push({id: makeId('language'), language: '', proficiency: ''}); })}>+ Add language</button>
     </EditorSection>
   </div>;
 }
@@ -78,7 +78,7 @@ function move<T>(items: T[], index: number, offset: number): void {
 }
 
 function splitList(value: string): string[] { return value.split(',').map(item => item.trim()).filter(Boolean); }
-function newExperience(): Experience { return {id: makeId('experience'), company: 'Company', role: 'Role', startDate: '2026', current: false, highlights: []}; }
-function newProject(): Project { return {id: makeId('project'), name: 'Project', technologies: [], highlights: []}; }
-function newSkill(): Skill { return {id: makeId('skill'), name: 'Skill group', keywords: []}; }
-function newEducation(): Education { return {id: makeId('education'), institution: 'Institution', qualification: 'Qualification', highlights: []}; }
+function newExperience(): Experience { return {id: makeId('experience'), company: '', role: '', startDate: '', current: false, highlights: []}; }
+function newProject(): Project { return {id: makeId('project'), name: '', technologies: [], highlights: []}; }
+function newSkill(): Skill { return {id: makeId('skill'), name: '', keywords: []}; }
+function newEducation(): Education { return {id: makeId('education'), institution: '', qualification: '', highlights: []}; }

@@ -4,14 +4,15 @@ const id = z.string().trim().min(1);
 const optionalText = z.string().trim().optional();
 const safeUrl = z.string().trim().url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol), 'Only HTTP(S) URLs are allowed.');
 
-const highlightSchema = z.object({id, text: z.string().trim().min(1)}).strict();
+const draftText = z.string().trim();
+const highlightSchema = z.object({id, text: draftText}).strict();
 
 export const cvDocumentSchema = z.object({
   schemaVersion: z.literal(1),
   id,
-  title: z.string().trim().min(1),
+  title: draftText,
   basics: z.object({
-    fullName: z.string().trim().min(1),
+    fullName: draftText,
     headline: optionalText,
     email: z.string().trim().email().optional().or(z.literal('')),
     phone: optionalText,
@@ -22,18 +23,18 @@ export const cvDocumentSchema = z.object({
   summary: optionalText,
   experience: z.array(z.object({
     id,
-    company: z.string().trim().min(1),
-    role: z.string().trim().min(1),
+    company: draftText,
+    role: draftText,
     location: optionalText,
-    startDate: z.string().trim().min(1),
+    startDate: draftText,
     endDate: optionalText,
     current: z.boolean(),
     highlights: z.array(highlightSchema),
   }).strict()),
   education: z.array(z.object({
     id,
-    institution: z.string().trim().min(1),
-    qualification: z.string().trim().min(1),
+    institution: draftText,
+    qualification: draftText,
     field: optionalText,
     location: optionalText,
     startDate: optionalText,
@@ -42,14 +43,14 @@ export const cvDocumentSchema = z.object({
   }).strict()),
   projects: z.array(z.object({
     id,
-    name: z.string().trim().min(1),
+    name: draftText,
     description: optionalText,
     url: safeUrl.optional().or(z.literal('')),
     technologies: z.array(z.string().trim().min(1)),
     highlights: z.array(highlightSchema),
   }).strict()),
-  skills: z.array(z.object({id, name: z.string().trim().min(1), keywords: z.array(z.string().trim().min(1))}).strict()),
-  languages: z.array(z.object({id, language: z.string().trim().min(1), proficiency: optionalText}).strict()),
+  skills: z.array(z.object({id, name: draftText, keywords: z.array(z.string().trim().min(1))}).strict()),
+  languages: z.array(z.object({id, language: draftText, proficiency: optionalText}).strict()),
   customSections: z.array(z.object({
     id,
     title: z.string().trim().min(1),

@@ -8,6 +8,11 @@ function dates(start?: string, end?: string, current?: boolean): string {
 }
 
 export const ClassicTemplate = memo(function ClassicTemplate({document}: TemplateProps) {
+  const experience = document.experience.filter(item => item.company || item.role || item.startDate || item.highlights.some(highlight => highlight.text));
+  const education = document.education.filter(item => item.institution || item.qualification || item.field);
+  const projects = document.projects.filter(item => item.name || item.description || item.technologies.length || item.highlights.some(highlight => highlight.text));
+  const skills = document.skills.filter(item => item.name || item.keywords.length);
+  const languages = document.languages.filter(item => item.language || item.proficiency);
   return (
     <article className="paper p-[15mm] font-[Arial,sans-serif] text-[10.5pt] leading-[1.45]" data-page-size={document.settings.pageSize} aria-label="Classic CV preview">
       <header className="border-b-2 border-neutral-900 pb-5 text-center">
@@ -19,25 +24,25 @@ export const ClassicTemplate = memo(function ClassicTemplate({document}: Templat
       </header>
       <div className="space-y-5 pt-5">
         {document.summary && <Section title="Profile"><p>{document.summary}</p></Section>}
-        {document.experience.length > 0 && <Section title="Experience">
-          <div className="space-y-4">{document.experience.map(item => <div key={item.id} className="break-inside-avoid">
+        {experience.length > 0 && <Section title="Experience">
+          <div className="space-y-4">{experience.map(item => <div key={item.id} className="break-inside-avoid">
             <div className="flex items-baseline justify-between gap-4"><h3 className="font-bold">{item.role} · {item.company}</h3><span className="shrink-0 text-[9pt] text-neutral-500">{dates(item.startDate, item.endDate, item.current)}</span></div>
             {item.location && <p className="text-[9pt] text-neutral-500">{item.location}</p>}
-            {item.highlights.length > 0 && <ul className="mt-1 list-disc space-y-1 pl-4">{item.highlights.map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
+            {item.highlights.some(highlight => highlight.text) && <ul className="mt-1 list-disc space-y-1 pl-4">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
           </div>)}</div>
         </Section>}
-        {document.projects.length > 0 && <Section title="Projects">
-          <div className="space-y-3">{document.projects.map(project => <div key={project.id} className="break-inside-avoid">
+        {projects.length > 0 && <Section title="Projects">
+          <div className="space-y-3">{projects.map(project => <div key={project.id} className="break-inside-avoid">
             <h3 className="font-bold">{project.name} <span className="font-normal text-neutral-500">{project.technologies.join(' · ')}</span></h3>
             {project.description && <p>{project.description}</p>}
-            {project.highlights.length > 0 && <ul className="list-disc pl-4">{project.highlights.map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
+            {project.highlights.some(highlight => highlight.text) && <ul className="list-disc pl-4">{project.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
           </div>)}</div>
         </Section>}
         <div className="grid grid-cols-2 gap-8">
-          {document.education.length > 0 && <Section title="Education">{document.education.map(item => <div key={item.id} className="mb-3 break-inside-avoid"><h3 className="font-bold">{item.qualification}{item.field ? `, ${item.field}` : ''}</h3><p>{item.institution}</p><p className="text-[9pt] text-neutral-500">{dates(item.startDate, item.endDate)}</p></div>)}</Section>}
-          {document.skills.length > 0 && <Section title="Skills">{document.skills.map(skill => <p key={skill.id} className="mb-1"><strong>{skill.name}:</strong> {skill.keywords.join(', ')}</p>)}</Section>}
+          {education.length > 0 && <Section title="Education">{education.map(item => <div key={item.id} className="mb-3 break-inside-avoid"><h3 className="font-bold">{item.qualification}{item.field ? `, ${item.field}` : ''}</h3><p>{item.institution}</p><p className="text-[9pt] text-neutral-500">{dates(item.startDate, item.endDate)}</p></div>)}</Section>}
+          {skills.length > 0 && <Section title="Skills">{skills.map(skill => <p key={skill.id} className="mb-1"><strong>{skill.name}:</strong> {skill.keywords.join(', ')}</p>)}</Section>}
         </div>
-        {document.languages.length > 0 && <Section title="Languages"><p>{document.languages.map(item => `${item.language}${item.proficiency ? ` (${item.proficiency})` : ''}`).join(' · ')}</p></Section>}
+        {languages.length > 0 && <Section title="Languages"><p>{languages.map(item => `${item.language}${item.proficiency ? ` (${item.proficiency})` : ''}`).join(' · ')}</p></Section>}
       </div>
     </article>
   );
