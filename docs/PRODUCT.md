@@ -30,7 +30,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 6. Accept or reject suggestions individually and see the preview update.
 7. Choose between two visual template cards or ask Gemma for a constrained design recommendation.
 8. Export or print the CV as PDF.
-9. Optionally sign in and save the document to Supabase.
+9. Create an account or sign in from the persistent toolbar, then optionally save the document to Supabase.
 
 ## Workspace model
 
@@ -42,6 +42,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - Template choice is presented visually. Gemma may recommend a tested template, professional accent, and layout density, but it cannot generate or execute arbitrary markup or CSS.
 - Mobile switches between `CV` and `Copilot` views instead of compressing both panes.
 - A new user never sees another person's CV as their own document. Test fixtures are never available in the production interface.
+- Account access remains visible from every workspace mode. Authentication uses a passwordless email link; signing in never uploads CV content by itself.
 
 ## MVP acceptance criteria
 

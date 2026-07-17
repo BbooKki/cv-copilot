@@ -3,6 +3,13 @@ import {supabase} from './supabaseClient';
 
 export type CloudResumeSummary = {id: string; title: string; updatedAt: string};
 
+export interface CloudResumeRepository {
+  list(): Promise<CloudResumeSummary[]>;
+  load(id: string): Promise<CvDocument>;
+  save(document: CvDocument): Promise<CvDocument>;
+  remove(id: string): Promise<void>;
+}
+
 function client() {
   if (!supabase) throw new Error('Cloud sync is not configured.');
   return supabase;
@@ -32,10 +39,11 @@ export class SupabaseResumeRepository {
   async save(document: CvDocument): Promise<CvDocument> {
     const userId = await currentUserId();
     const cloudDocument = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(document.id) ? document : {...document, id: crypto.randomUUID()};
+    const cloudTitle = cloudDocument.title.trim() || cloudDocument.basics.fullName.trim() || 'Untitled CV';
     const {error} = await client().from('resumes').upsert({
       id: cloudDocument.id,
       user_id: userId,
-      title: cloudDocument.title,
+      title: cloudTitle,
       template_id: cloudDocument.settings.templateId,
       schema_version: cloudDocument.schemaVersion,
       content: cloudDocument,
