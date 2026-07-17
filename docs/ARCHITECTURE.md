@@ -28,6 +28,8 @@ Vite serves the worker as an ES module in development, but production must bundl
 
 WebGPU initialization has a three-minute watchdog. Cancelling or timing out initialization terminates and recreates the worker because aborting the completed model fetch cannot interrupt `Engine.create()`. A verified cached model remains available for retry without another network download.
 
+Runtime sessions explicitly disable audio and vision modalities. Every text generation has a 90-second watchdog; timeout cancels the worker generation, retains partial output for local diagnosis, and retries only the failed compact stage.
+
 ### Job extraction function
 
 The function accepts one public HTTP(S) URL and returns normalized, size-limited job text plus basic metadata. It is not a general proxy. It must validate DNS/IP destinations before requests and redirects, allow only appropriate textual content, enforce timeout/size limits, and sanitize the document.

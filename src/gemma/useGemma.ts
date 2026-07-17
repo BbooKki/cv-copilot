@@ -3,13 +3,16 @@ import {GEMMA_MODEL_BYTES, GEMMA_MODEL_URL, type GemmaGenerationKind, type Gemma
 
 export type GemmaStatus = 'disabled' | 'unsupported' | 'idle' | 'downloading' | 'initializing' | 'ready' | 'generating' | 'error';
 export const GEMMA_INITIALIZATION_TIMEOUT_MS = 3 * 60 * 1000;
+export const GEMMA_GENERATION_TIMEOUT_MS = 90 * 1000;
 
-export function useGemma(onComplete: (raw: string) => void) {
+export function useGemma(onComplete: (raw: string) => void, onGenerationTimeout: (partialOutput: string) => void = () => undefined) {
   const workerRef = useRef<Worker | null>(null);
   const startWorkerRef = useRef<() => Worker | null>(() => null);
   const initializationTimerRef = useRef<number | undefined>(undefined);
+  const generationTimerRef = useRef<number | undefined>(undefined);
   const modelLoadedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
+  const onGenerationTimeoutRef = useRef(onGenerationTimeout);
   const outputRef = useRef('');
   const [status, setStatus] = useState<GemmaStatus>('idle');
   const [cached, setCached] = useState(false);
@@ -17,7 +20,13 @@ export function useGemma(onComplete: (raw: string) => void) {
   const [error, setError] = useState('');
   const [capability, setCapability] = useState({webGpu: false, secureContext: false, storageAvailable: 0});
 
+  const clearGenerationTimer = useCallback(() => {
+    if (generationTimerRef.current !== undefined) window.clearTimeout(generationTimerRef.current);
+    generationTimerRef.current = undefined;
+  }, []);
+
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  useEffect(() => { onGenerationTimeoutRef.current = onGenerationTimeout; }, [onGenerationTimeout]);
 
   useEffect(() => {
     if (import.meta.env.VITE_GEMMA_ENABLED === 'false') { setStatus('disabled'); return; }
@@ -57,14 +66,15 @@ export function useGemma(onComplete: (raw: string) => void) {
         }
         if (message.type === 'loaded') { clearInitializationTimer(); modelLoadedRef.current = true; setStatus('ready'); }
         if (message.type === 'generation-chunk') outputRef.current += message.text;
-        if (message.type === 'generation-complete') { setStatus('ready'); onCompleteRef.current(outputRef.current); }
+        if (message.type === 'generation-complete') { clearGenerationTimer(); setStatus('ready'); onCompleteRef.current(outputRef.current); }
         if (message.type === 'cache-cleared') { clearInitializationTimer(); modelLoadedRef.current = false; setCached(false); setStatus('idle'); }
-        if (message.type === 'cancelled') { clearInitializationTimer(); setStatus(message.operation === 'generation' ? 'ready' : 'idle'); }
-        if (message.type === 'error') { clearInitializationTimer(); setError(message.message); setStatus('error'); }
+        if (message.type === 'cancelled') { clearInitializationTimer(); clearGenerationTimer(); setStatus(message.operation === 'generation' ? 'ready' : 'idle'); }
+        if (message.type === 'error') { clearInitializationTimer(); clearGenerationTimer(); setError(message.message); setStatus('error'); }
       };
       worker.onerror = () => {
         if (!active || worker !== workerRef.current) return;
         clearInitializationTimer();
+        clearGenerationTimer();
         worker.terminate();
         workerRef.current = null;
         modelLoadedRef.current = false;
@@ -81,8 +91,8 @@ export function useGemma(onComplete: (raw: string) => void) {
       setCapability(next);
       if (!next.webGpu || !next.secureContext) setStatus('unsupported');
     });
-    return () => { active = false; clearInitializationTimer(); workerRef.current?.terminate(); workerRef.current = null; };
-  }, []);
+    return () => { active = false; clearInitializationTimer(); clearGenerationTimer(); workerRef.current?.terminate(); workerRef.current = null; };
+  }, [clearGenerationTimer]);
 
   const post = useCallback((message: MainToGemmaMessage) => workerRef.current?.postMessage(message), []);
   const load = useCallback(() => {
@@ -93,8 +103,21 @@ export function useGemma(onComplete: (raw: string) => void) {
     const worker = workerRef.current ?? startWorkerRef.current();
     worker?.postMessage({type: 'load', modelUrl: GEMMA_MODEL_URL, verifiedBytes: GEMMA_MODEL_BYTES} satisfies MainToGemmaMessage);
   }, [cached]);
-  const generate = useCallback((prompt: string, kind: GemmaGenerationKind = 'analysis') => { outputRef.current = ''; setError(''); setStatus('generating'); post({type: 'generate', prompt, kind}); }, [post]);
+  const generate = useCallback((prompt: string, kind: GemmaGenerationKind = 'analysis') => {
+    clearGenerationTimer();
+    outputRef.current = '';
+    setError('');
+    setStatus('generating');
+    post({type: 'generate', prompt, kind});
+    generationTimerRef.current = window.setTimeout(() => {
+      generationTimerRef.current = undefined;
+      post({type: 'cancel-generation'});
+      setStatus('ready');
+      onGenerationTimeoutRef.current(outputRef.current);
+    }, GEMMA_GENERATION_TIMEOUT_MS);
+  }, [clearGenerationTimer, post]);
   const cancel = useCallback(() => {
+    clearGenerationTimer();
     if (status === 'generating') { post({type: 'cancel-generation'}); return; }
     workerRef.current?.terminate();
     workerRef.current = null;
@@ -104,7 +127,7 @@ export function useGemma(onComplete: (raw: string) => void) {
     setStatus('idle');
     setError('');
     startWorkerRef.current();
-  }, [post, status]);
+  }, [clearGenerationTimer, post, status]);
   const clearCache = useCallback(() => post({type: 'clear-cache'}), [post]);
 
   return {status, cached, progress, error, capability, load, generate, cancel, clearCache};

@@ -39,6 +39,7 @@ export function App() {
   const [designError, setDesignError] = useState('');
   const [handledSuggestions, setHandledSuggestions] = useState<Record<string, 'accepted' | 'rejected'>>({});
   const [activeStage, setActiveStage] = useState<GenerationStage>(null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const saveTimer = useRef<number | null>(null);
   const activeStageRef = useRef<GenerationStage>(null);
   const analysisRequestRef = useRef<AiAnalysisRequest | null>(null);
@@ -92,9 +93,32 @@ export function App() {
       }
     }
   }, [changeActiveStage]);
-  const gemma = useGemma(handleModelComplete);
+  const handleGenerationTimeout = useCallback((partialOutput: string) => {
+    const timedOutStage = activeStageRef.current;
+    changeActiveStage(null);
+    const message = 'Local generation exceeded 90 seconds and was stopped. Retry with the compact response.';
+    if (timedOutStage === 'design') setDesignError(message);
+    else if (timedOutStage === 'fit' || timedOutStage === 'suggestions') {
+      setAnalysisError('');
+      setInvalidAnalysisOutput({stage: timedOutStage, message, raw: partialOutput});
+    }
+  }, [changeActiveStage]);
+  const gemma = useGemma(handleModelComplete, handleGenerationTimeout);
 
   useEffect(() => { generateRef.current = gemma.generate; }, [gemma.generate]);
+
+  useEffect(() => {
+    if (!activeStage || gemma.status !== 'generating') {
+      setGenerationElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setGenerationElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setGenerationElapsedSeconds(Math.floor((Date.now() - startedAt) / 1_000));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [activeStage, gemma.status]);
 
   useEffect(() => {
     if (gemma.status !== 'error' || !activeStageRef.current) return;
@@ -195,7 +219,8 @@ export function App() {
   const formatBytes = (bytes: number) => `${(bytes / 1_000_000_000).toFixed(2)} GB`;
   const progress = Math.min(100, (gemma.progress.received / Math.max(gemma.progress.total, 1)) * 100);
   const cvHasContent = hasCvContent(document);
-  const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? 'Analyzing job fit…' : activeStage === 'suggestions' && gemma.status === 'generating' ? 'Preparing grounded edits…' : 'Analyze locally';
+  const elapsedLabel = formatElapsed(generationElapsedSeconds);
+  const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? `Analyzing job fit · ${elapsedLabel}` : activeStage === 'suggestions' && gemma.status === 'generating' ? `Preparing grounded edit · ${elapsedLabel}` : 'Analyze locally';
 
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
@@ -228,7 +253,7 @@ export function App() {
         {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
           <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
-          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
+          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
           <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
@@ -245,7 +270,7 @@ export function App() {
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
           {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
-          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
+          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
           <CloudPanel document={document} onLoad={updateDocument} />
         </div>}
       </aside>
@@ -255,8 +280,12 @@ export function App() {
   </main>;
 }
 
-function AnalysisPanel({analysis, document, handled, generatingSuggestions, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
-  return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.matchedRequirements.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}{analysis.warnings.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 text-xs leading-5 text-amber-200/70">{warning}</p>)}</div>}{generatingSuggestions && <div className="mt-5 flex items-center gap-2 border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit analysis is ready. Preparing grounded edits…</span></div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
+function AnalysisPanel({analysis, document, handled, generatingSuggestions, generationElapsedLabel, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; generationElapsedLabel: string; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
+  return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.matchedRequirements.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}{analysis.warnings.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 text-xs leading-5 text-amber-200/70">{warning}</p>)}</div>}{generatingSuggestions && <div className="mt-5 flex items-center gap-2 border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit analysis is ready. Preparing one grounded edit · {generationElapsedLabel}</span></div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
+}
+
+function formatElapsed(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 function StatusPill({icon, label, tone}: {icon: React.ReactNode; label: string; tone: 'neutral' | 'error'}) {

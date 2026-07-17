@@ -1,15 +1,17 @@
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {App} from './App';
 
 const gemmaHarness = vi.hoisted(() => ({
   complete: null as null | ((raw: string) => void),
+  timeout: null as null | ((partialOutput: string) => void),
   generate: vi.fn(),
 }));
 
 vi.mock('../gemma/useGemma', () => ({
-  useGemma: (onComplete: (raw: string) => void) => {
+  useGemma: (onComplete: (raw: string) => void, onGenerationTimeout: (partialOutput: string) => void) => {
     gemmaHarness.complete = onComplete;
+    gemmaHarness.timeout = onGenerationTimeout;
     return {
       status: 'ready' as const,
       cached: true,
@@ -33,8 +35,11 @@ vi.mock('../persistence/CloudPanel', () => ({CloudPanel: () => null}));
 describe('split tailoring flow', () => {
   beforeEach(() => {
     gemmaHarness.complete = null;
+    gemmaHarness.timeout = null;
     gemmaHarness.generate.mockReset();
   });
+
+  afterEach(cleanup);
 
   it('preserves valid fit analysis when suggestion JSON fails and retries only suggestions', async () => {
     render(<App />);
@@ -69,6 +74,31 @@ describe('split tailoring flow', () => {
 
     await waitFor(() => expect(gemmaHarness.generate).toHaveBeenCalledTimes(3));
     expect(gemmaHarness.generate.mock.calls[2]?.[0]).toContain('Return at most 1 suggestions');
+    expect(gemmaHarness.generate.mock.calls[2]?.[1]).toBe('analysis-repair');
+  });
+
+  it('keeps completed fit analysis when suggestion generation reaches the watchdog', async () => {
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
+
+    act(() => gemmaHarness.complete?.(JSON.stringify({
+      protocolVersion: 1,
+      fitSummary: 'The CV has partial evidence for this frontend role.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [],
+    })));
+    act(() => gemmaHarness.timeout?.('{"protocolVersion":1,"suggestions":['));
+
+    expect(await screen.findByText(/exceeded 90 seconds/)).toBeInTheDocument();
+    expect(screen.getByText('The CV has partial evidence for this frontend role.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Retry suggestions'}));
+
+    await waitFor(() => expect(gemmaHarness.generate).toHaveBeenCalledTimes(3));
     expect(gemmaHarness.generate.mock.calls[2]?.[1]).toBe('analysis-repair');
   });
 });

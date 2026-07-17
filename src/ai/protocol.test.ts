@@ -29,7 +29,7 @@ describe('AI analysis protocol', () => {
     expect(prompt).not.toContain('+1 555 0100');
     expect(prompt).not.toContain('templateId');
     expect(prompt).toContain('Do not propose CV edits');
-    expect(prompt).toContain('Return at most 3 matched requirements, 3 gaps, and 2 warnings');
+    expect(prompt).toContain('Return at most 2 matched requirements, 2 gaps, and 1 warnings');
     expect(() => JSON.parse(cvFacts)).not.toThrow();
   });
 
@@ -38,7 +38,7 @@ describe('AI analysis protocol', () => {
     const prompt = buildSuggestionPrompt(request(), fit);
 
     expect(prompt).toContain('VALIDATED_FIT_ANALYSIS_BEGIN');
-    expect(prompt).toContain('Return at most 2 suggestions');
+    expect(prompt).toContain('Return at most 1 suggestions');
     expect(prompt).toContain(`originalText and proposedText at most ${SUGGESTION_TEXT_CHAR_LIMIT} characters each`);
     expect(prompt).not.toContain('JOB_DATA_BEGIN');
     expect(prompt).toContain(JSON.stringify(fit));
@@ -49,7 +49,7 @@ describe('AI analysis protocol', () => {
     const suggestionPrompt = buildSuggestionPrompt(request(), fitResult(), {repair: true});
 
     expect(fitPrompt).toContain('previous response was invalid or incomplete JSON');
-    expect(fitPrompt).toContain('Return at most 2 matched requirements, 2 gaps, and 1 warnings');
+    expect(fitPrompt).toContain('Return at most 1 matched requirements, 1 gaps, and 1 warnings');
     expect(suggestionPrompt).toContain('single-suggestion limit');
     expect(suggestionPrompt).toContain('Return at most 1 suggestions');
     expect(suggestionPrompt).toContain('never truncate JSON');
@@ -59,7 +59,7 @@ describe('AI analysis protocol', () => {
     const prompt = buildAnalysisPrompt(request());
 
     expect(prompt).toContain('"suggestions"');
-    expect(prompt).toContain('Return at most 2 suggestions, 3 matched requirements, 3 gaps, and 2 warnings');
+    expect(prompt).toContain('Return at most 1 suggestions, 2 matched requirements, 2 gaps, and 1 warnings');
   });
 
   it('separately parses complete results and rejects oversized output fields', () => {

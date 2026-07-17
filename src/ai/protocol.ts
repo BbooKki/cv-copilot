@@ -81,8 +81,8 @@ type ResponseLimits = {
   suggestions: number;
 };
 
-const NORMAL_LIMITS: ResponseLimits = {matchedRequirements: 3, gaps: 3, warnings: 2, suggestions: 2};
-const REPAIR_LIMITS: ResponseLimits = {matchedRequirements: 2, gaps: 2, warnings: 1, suggestions: 1};
+const NORMAL_LIMITS: ResponseLimits = {matchedRequirements: 2, gaps: 2, warnings: 1, suggestions: 1};
+const REPAIR_LIMITS: ResponseLimits = {matchedRequirements: 1, gaps: 1, warnings: 1, suggestions: 1};
 
 export function parseFitAnalysisResult(raw: string): AiFitAnalysisResult {
   return fitAnalysisResultSchema.parse(parseJson(raw));

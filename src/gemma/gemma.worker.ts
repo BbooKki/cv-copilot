@@ -44,7 +44,12 @@ async function createConversation(kind: GemmaGenerationKind): Promise<Conversati
   return engine.createConversation({
     preface: {messages: [{role: 'system', content: SYSTEM_PROMPT}]},
     prefillPrefaceOnInit: false,
-    sessionConfig: {maxOutputTokens: GEMMA_GENERATION_CONFIG[kind].maxOutputTokens, samplerParams: {temperature: 0.15, p: 0.9, k: 40}},
+    sessionConfig: {
+      audioModalityEnabled: false,
+      visionModalityEnabled: false,
+      maxOutputTokens: GEMMA_GENERATION_CONFIG[kind].maxOutputTokens,
+      samplerParams: {temperature: 0.15, p: 0.9, k: 40},
+    },
   });
 }
 
@@ -103,7 +108,7 @@ async function generate(prompt: string, kind: GemmaGenerationKind): Promise<void
     const reader = conversation.sendMessageStreaming(prompt).getReader();
     while (true) {
       const {done, value: chunk} = await reader.read();
-      if (done) break;
+      if (done) { if (generationCancelled) return; break; }
       if (generationCancelled) return;
       const text = textFrom(chunk);
       if (text) post({type: 'generation-chunk', text});

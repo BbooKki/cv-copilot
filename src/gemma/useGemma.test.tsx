@@ -1,7 +1,7 @@
 import {act, renderHook} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {GemmaToMainMessage, MainToGemmaMessage} from './protocol';
-import {GEMMA_INITIALIZATION_TIMEOUT_MS, useGemma} from './useGemma';
+import {GEMMA_GENERATION_TIMEOUT_MS, GEMMA_INITIALIZATION_TIMEOUT_MS, useGemma} from './useGemma';
 
 class FakeWorker {
   static instances: FakeWorker[] = [];
@@ -85,6 +85,22 @@ describe('useGemma', () => {
     act(() => result.current.generate('Recommend a design.', 'design'));
 
     expect(FakeWorker.instances[0].messages).toContainEqual({type: 'generate', prompt: 'Recommend a design.', kind: 'design'});
+    unmount();
+  });
+
+  it('stops a generation after 90 seconds and returns its partial output for a compact retry', async () => {
+    const onTimeout = vi.fn();
+    const {result, unmount} = renderHook(() => useGemma(vi.fn(), onTimeout));
+    await act(async () => Promise.resolve());
+    const worker = FakeWorker.instances[0];
+
+    act(() => result.current.generate('Analyze this role.'));
+    act(() => worker.emit({type: 'generation-chunk', text: '{"partial":'}));
+    act(() => vi.advanceTimersByTime(GEMMA_GENERATION_TIMEOUT_MS));
+
+    expect(worker.messages).toContainEqual({type: 'cancel-generation'});
+    expect(onTimeout).toHaveBeenCalledWith('{"partial":');
+    expect(result.current.status).toBe('ready');
     unmount();
   });
 });

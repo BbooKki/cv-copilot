@@ -111,6 +111,7 @@ export type AiAnalysisResult = {
 6. Record an undo patch containing the previous value.
 7. Preserve a validated fit response while generating suggestions.
 8. If fit validation fails, offer a smaller fit-only retry. If suggestion validation fails, preserve the fit result and offer a one-suggestion retry.
+9. Stop any generation that exceeds 90 seconds, preserve its partial output for diagnosis, and offer a compact retry for only the failed stage.
 
 ## Design recommendation protocol
 
@@ -142,6 +143,7 @@ The runtime uses an 8,192-token context. Input and output still remain explicitl
 - Analyze sections independently if the combined request is too large.
 - Keep the system prompt concise and cap generated suggestions.
 - Keep analysis input within an explicit character budget: compact CV facts without contact or presentation metadata, plus at most 2,500 job-description characters.
-- Normal analysis generations have a 1,900-token hard output ceiling. The split prompts normally request at most two concise suggestions.
-- Repair generations use a 900-token ceiling and materially smaller schemas: fewer fit items or at most one suggestion.
+- Normal analysis generations have a 1,900-token hard output ceiling. Fit requests are capped at two matches, two gaps, and one warning; edit requests are capped at one concise suggestion.
+- Repair generations use a 900-token ceiling and materially smaller schemas: one match, one gap, one warning, or one suggestion.
 - Cap every generated string, including original and proposed CV text. If a response is malformed, retain a local raw-output preview and retry only the failed stage.
+- Start each generation with a 90-second watchdog and show elapsed stage time in the UI so slow WebGPU work is visible and recoverable.
