@@ -11,7 +11,7 @@ The hackathon MVP includes a responsive structured editor, direct preview editin
 - React 19, TypeScript, Vite, and Tailwind CSS
 - Gemma 4 E2B with LiteRT-LM, WebGPU, a Web Worker, and browser caching
 - Vercel Functions for guarded job-page extraction and server-side cloud AI
-- Supabase Auth and Postgres for optional cloud saving
+- Supabase Auth and Postgres for optional premium cloud saving
 - Browser print CSS for PDF export
 
 ## Documents
@@ -45,16 +45,27 @@ LiteRT may log an unavailable NPU, `No Winograd`, or mel-filterbank warnings whi
 
 ## Cloud schema
 
-The committed migration in `supabase/migrations/` creates resumes, job targets, and AI analyses with explicit authenticated grants, row-level security, owner-only policies, and same-user foreign-key integrity. The app remains fully usable when cloud configuration is absent.
+The committed migrations create resumes, job targets, AI analyses, and account entitlements with explicit grants, row-level security, owner-only policies, same-user foreign-key integrity, and premium-gated CV writes. The app remains fully usable when cloud configuration is absent.
 
 ## Supabase Auth setup
 
-Cloud backup uses passwordless email magic links. The browser receives only the project URL and a publishable key; never add a secret or service-role key to a `VITE_` variable.
+Cloud saving uses email/password authentication with email confirmation and password recovery. The browser receives only the project URL and a publishable key; never add a secret or service-role key to a `VITE_` variable.
 
 1. Create or select the CV Copilot project in the intended Supabase account.
 2. Link the checkout with `supabase link --profile hongfeiliu --project-ref <project-ref>`.
 3. Apply the committed migration through the normal Supabase migration workflow.
-4. In **Auth → URL Configuration**, set the Site URL to the production application URL. Add the exact production URL, `http://localhost:5173/**`, and the required Vercel preview pattern to the redirect allow list.
-5. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_CLOUD_ENABLED=true` locally and in the deployment environment.
+4. In **Auth → URL Configuration**, set the Site URL to the production application URL. Add the exact production URL, `/account`, `/account/reset-password`, `http://localhost:5173/**`, and the required Vercel preview pattern to the redirect allow list.
+5. Keep email confirmation enabled and configure production SMTP before launch; the hosted trial sender is only suitable for development.
+6. Grant premium manually for the MVP by inserting or updating the user's row in `public.account_entitlements`. A missing row is a free account; use `plan = 'premium'` and leave `expires_at` null for non-expiring access.
+7. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_CLOUD_ENABLED=true` locally and in the deployment environment.
 
-The magic-link redirect returns to the current application path. Query parameters and URL fragments are removed before the redirect URL is sent to Supabase. A signed-in user still chooses when to upload by pressing **Save to cloud**; signing in alone does not upload CV content.
+```sql
+insert into public.account_entitlements (user_id, plan, expires_at)
+values ('AUTH_USER_UUID', 'premium', null)
+on conflict (user_id) do update
+set plan = excluded.plan,
+    expires_at = excluded.expires_at,
+    updated_at = now();
+```
+
+Confirmation returns to the account page and password recovery returns to `/account/reset-password`. Query parameters and URL fragments are removed before redirect URLs are sent to Supabase. A premium user still chooses when to upload by pressing **Save to account**; signing in alone does not upload CV content.

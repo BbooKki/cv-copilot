@@ -46,7 +46,7 @@ The function accepts one public HTTP(S) URL and returns normalized, size-limited
 
 ### Supabase
 
-Supabase stores optional user-owned documents. The frontend uses a publishable key and relies on explicit grants plus RLS. Secret keys are not required for normal user CRUD.
+Supabase Auth provides email/password signup, email confirmation, password recovery, persistent sessions, and sign-out. Postgres stores optional user-owned documents plus server-controlled account entitlements. The frontend uses a publishable key and relies on explicit grants plus RLS; premium write access is enforced in database policies rather than trusted to UI state. Secret keys are not required for normal user CRUD.
 
 ## Frontend modules
 
@@ -75,6 +75,7 @@ src/
 - Accepting a suggestion creates a reversible patch and updates `CvDocument`.
 - Template choice changes presentation only, never content.
 - Local persistence is available immediately; cloud persistence is an optional adapter.
+- Account navigation exposes `/account` and `/account/reset-password`; opening a cloud CV writes the validated canonical document into the normal local persistence path before returning to the editor.
 
 ## Runtime flow
 

@@ -30,7 +30,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 6. Optionally research the company with user-triggered Google grounding and claim-level citations.
 7. Generate likely interview questions and a deterministic CV-derived pitch; create quota-free outreach templates locally.
 8. Edit supported narrative fields directly from the paper preview and select one of two tested templates.
-9. Export or print the CV as PDF, then optionally sign in and save it to Supabase.
+9. Export or print the CV as PDF, then optionally sign in and, with premium access, save the editable CV to Supabase.
 
 ## Workspace model
 
@@ -42,7 +42,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - Template choice is presented visually. Gemma may recommend a tested template, professional accent, and layout density, but it cannot generate or execute arbitrary markup or CSS.
 - Mobile switches between `CV` and `Copilot` views instead of compressing both panes.
 - A new user never sees another person's CV as their own document. Test fixtures are never available in the production interface.
-- Account access remains visible from every workspace mode. Authentication uses a passwordless email link; signing in never uploads CV content by itself.
+- Account access remains visible from every workspace mode. Authentication uses email and password with email confirmation and password recovery; signing in never uploads CV content by itself.
 
 ## MVP acceptance criteria
 
@@ -60,7 +60,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - AI design output is schema-validated and changes presentation only after explicit acceptance.
 - PDF/print output is legible, removes editor chrome, and avoids obvious section clipping.
 - Unsupported browsers receive an actionable fallback instead of a broken AI screen.
-- Signed-in users can save, list, open, update, and delete only their own cloud documents.
+- Signed-in users can list, open, and delete only their own cloud documents. An active, server-controlled premium entitlement is required to create or update a cloud document.
 
 ## Success demo
 

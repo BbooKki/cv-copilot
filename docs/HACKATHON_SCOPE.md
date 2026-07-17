@@ -18,8 +18,8 @@
 
 ## Should ship
 
-- Supabase email or magic-link authentication
-- Owner-only cloud save/load/update/delete
+- Supabase email/password authentication with confirmation and password recovery
+- Owner-only cloud list/open/delete, with premium-gated cloud create/update
 - Model cache management and resource warnings
 - Deterministic fictional test fixtures that are not exposed in the production interface
 - Server-side AI rate limits, daily budget, and emergency kill switch

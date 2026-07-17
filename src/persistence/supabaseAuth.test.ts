@@ -1,19 +1,35 @@
 import type {Session, SupabaseClient} from '@supabase/supabase-js';
 import {describe, expect, it, vi} from 'vitest';
-import {createSupabaseAuthService, getAuthRedirectUrl} from './supabaseAuth';
+import {createSupabaseAuthService, getAuthRedirectUrl, getPasswordResetRedirectUrl} from './supabaseAuth';
 
 describe('Supabase auth service', () => {
-  it('requests a magic link with a normalized email and approved redirect', async () => {
-    const signInWithOtp = vi.fn().mockResolvedValue({data: {user: null, session: null}, error: null});
-    const client = {auth: {signInWithOtp}} as unknown as SupabaseClient;
+  it('signs up with a normalized email, password, and approved confirmation redirect', async () => {
+    const signUp = vi.fn().mockResolvedValue({data: {user: {id: 'user-1'}, session: null}, error: null});
+    const client = {auth: {signUp}} as unknown as SupabaseClient;
     const auth = createSupabaseAuthService(client);
 
-    await auth.sendMagicLink('  person@example.com  ', 'https://cv.example.com/');
-
-    expect(signInWithOtp).toHaveBeenCalledWith({
+    await expect(auth.signUp('  person@example.com  ', 'secure-pass', 'https://cv.example.com/account')).resolves.toEqual({confirmationRequired: true});
+    expect(signUp).toHaveBeenCalledWith({
       email: 'person@example.com',
-      options: {emailRedirectTo: 'https://cv.example.com/', shouldCreateUser: true},
+      password: 'secure-pass',
+      options: {emailRedirectTo: 'https://cv.example.com/account'},
     });
+  });
+
+  it('signs in and supports the complete password-reset flow', async () => {
+    const signInWithPassword = vi.fn().mockResolvedValue({data: {}, error: null});
+    const resetPasswordForEmail = vi.fn().mockResolvedValue({data: {}, error: null});
+    const updateUser = vi.fn().mockResolvedValue({data: {}, error: null});
+    const client = {auth: {signInWithPassword, resetPasswordForEmail, updateUser}} as unknown as SupabaseClient;
+    const auth = createSupabaseAuthService(client);
+
+    await auth.signIn(' person@example.com ', 'secure-pass');
+    await auth.requestPasswordReset(' person@example.com ', 'https://cv.example.com/account/reset-password');
+    await auth.updatePassword('new-secure-pass');
+
+    expect(signInWithPassword).toHaveBeenCalledWith({email: 'person@example.com', password: 'secure-pass'});
+    expect(resetPasswordForEmail).toHaveBeenCalledWith('person@example.com', {redirectTo: 'https://cv.example.com/account/reset-password'});
+    expect(updateUser).toHaveBeenCalledWith({password: 'new-secure-pass'});
   });
 
   it('propagates initialization and sign-out errors', async () => {
@@ -48,7 +64,8 @@ describe('Supabase auth service', () => {
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('removes callback parameters from the auth redirect URL', () => {
-    expect(getAuthRedirectUrl('https://cv.example.com/workspace?code=secret#access_token=secret')).toBe('https://cv.example.com/workspace');
+  it('builds sanitized account and password-reset redirect URLs', () => {
+    expect(getAuthRedirectUrl('https://cv.example.com/account?code=secret#access_token=secret')).toBe('https://cv.example.com/account');
+    expect(getPasswordResetRedirectUrl('https://cv.example.com/workspace?code=secret')).toBe('https://cv.example.com/account/reset-password');
   });
 });

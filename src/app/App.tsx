@@ -26,6 +26,7 @@ import {TemplatePicker} from '../templates/TemplatePicker';
 import {STYLE_PRESETS} from '../templates/presets';
 import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
+import {AccountPage} from '../persistence/AccountPage';
 
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
@@ -33,6 +34,35 @@ type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
 const CLOUD_CONSENT_KEY = 'cvcopilot.cloudConsent.v1';
 
 export function App() {
+  const [route, setRoute] = useState(() => appRoute(window.location.pathname));
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(appRoute(window.location.pathname));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = useCallback((path: '/' | '/account' | '/account/reset-password') => {
+    window.history.pushState({}, '', path);
+    setRoute(appRoute(path));
+  }, []);
+
+  if (route !== 'workspace') {
+    return <AccountPage
+      passwordRecovery={route === 'password-recovery'}
+      onBack={() => navigate('/')}
+      onOpenDocument={async document => {
+        await localResumeRepository.save(document);
+        navigate('/');
+      }}
+      onPasswordResetComplete={() => navigate('/account')}
+    />;
+  }
+
+  return <Workspace onOpenAccount={() => navigate('/account')} />;
+}
+
+function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const [document, setDocument] = useState<CvDocument>(createBlankCv);
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -420,7 +450,7 @@ export function App() {
             <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
             <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-30" disabled={!cvHasContent} onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
           </div>
-          <AccountMenu />
+          <AccountMenu onOpenAccount={onOpenAccount} />
         </div>
       </div>
       <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 lg:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
@@ -516,7 +546,7 @@ export function App() {
               </div>
             </div>}
           </section>}
-          <CloudPanel document={document} onLoad={updateDocument} />
+          <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
         </div>}
       </aside>
     </div>
@@ -531,6 +561,12 @@ export function App() {
       </div>
     </div>}
   </main>;
+}
+
+function appRoute(pathname: string): 'workspace' | 'account' | 'password-recovery' {
+  if (pathname === '/account/reset-password') return 'password-recovery';
+  if (pathname === '/account') return 'account';
+  return 'workspace';
 }
 
 function AnalysisPanel({analysis, document, handled, generatingSuggestions, generationElapsedLabel, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; generationElapsedLabel: string; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {

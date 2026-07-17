@@ -11,7 +11,10 @@ describe('useSupabaseSession', () => {
     const auth: SupabaseAuthService = {
       getSession: vi.fn().mockResolvedValue(null),
       subscribe: vi.fn(nextListener => { listener = nextListener; return unsubscribe; }),
-      sendMagicLink: vi.fn(),
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn(),
     };
     const {result, unmount} = renderHook(() => useSupabaseSession(auth));
@@ -29,7 +32,10 @@ describe('useSupabaseSession', () => {
     const auth: SupabaseAuthService = {
       getSession: vi.fn().mockRejectedValue(new Error('Expired local session')),
       subscribe: vi.fn(() => vi.fn()),
-      sendMagicLink: vi.fn(),
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn(),
     };
     const {result} = renderHook(() => useSupabaseSession(auth));

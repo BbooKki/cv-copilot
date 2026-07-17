@@ -233,3 +233,23 @@ describe('cloud analysis (default)', () => {
     await waitFor(() => expect(interviewHarness.build).toHaveBeenCalledTimes(1));
   });
 });
+
+describe('account routing', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('opens the dedicated account page and returns to the editor', async () => {
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Sign in'}));
+    expect(await screen.findByRole('heading', {name: 'Your account'})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/account');
+
+    fireEvent.click(screen.getByRole('button', {name: 'Back to editor'}));
+    expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+});

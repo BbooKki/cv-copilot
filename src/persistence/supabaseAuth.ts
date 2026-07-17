@@ -2,10 +2,17 @@ import type {Session, SupabaseClient} from '@supabase/supabase-js';
 
 export type AuthSessionListener = (session: Session | null) => void;
 
+export type SignUpResult = {
+  confirmationRequired: boolean;
+};
+
 export interface SupabaseAuthService {
   getSession(): Promise<Session | null>;
   subscribe(listener: AuthSessionListener): () => void;
-  sendMagicLink(email: string, redirectTo: string): Promise<void>;
+  signUp(email: string, password: string, redirectTo: string): Promise<SignUpResult>;
+  signIn(email: string, password: string): Promise<void>;
+  requestPasswordReset(email: string, redirectTo: string): Promise<void>;
+  updatePassword(password: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -20,11 +27,25 @@ export function createSupabaseAuthService(client: SupabaseClient): SupabaseAuthS
       const {data} = client.auth.onAuthStateChange((_event, session) => listener(session));
       return () => data.subscription.unsubscribe();
     },
-    async sendMagicLink(email, redirectTo) {
-      const {error} = await client.auth.signInWithOtp({
+    async signUp(email, password, redirectTo) {
+      const {data, error} = await client.auth.signUp({
         email: email.trim(),
-        options: {emailRedirectTo: redirectTo, shouldCreateUser: true},
+        password,
+        options: {emailRedirectTo: redirectTo},
       });
+      if (error) throw error;
+      return {confirmationRequired: data.session === null};
+    },
+    async signIn(email, password) {
+      const {error} = await client.auth.signInWithPassword({email: email.trim(), password});
+      if (error) throw error;
+    },
+    async requestPasswordReset(email, redirectTo) {
+      const {error} = await client.auth.resetPasswordForEmail(email.trim(), {redirectTo});
+      if (error) throw error;
+    },
+    async updatePassword(password) {
+      const {error} = await client.auth.updateUser({password});
       if (error) throw error;
     },
     async signOut() {
@@ -38,5 +59,11 @@ export function getAuthRedirectUrl(currentUrl: string): string {
   const redirectUrl = new URL(currentUrl);
   redirectUrl.search = '';
   redirectUrl.hash = '';
+  return redirectUrl.toString();
+}
+
+export function getPasswordResetRedirectUrl(currentUrl: string): string {
+  const redirectUrl = new URL(getAuthRedirectUrl(currentUrl));
+  redirectUrl.pathname = '/account/reset-password';
   return redirectUrl.toString();
 }
