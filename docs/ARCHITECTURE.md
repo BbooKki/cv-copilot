@@ -69,6 +69,7 @@ src/
 
 - `CvDocument` is the only source of truth for resume content.
 - The initial document is structurally valid but contains no personal or career facts. Fictional fixtures are test-only dependencies and never enter the production interface.
+- Tailor conversation messages are transient UI state. Job input feeds the normal typed analysis request; follow-up fit, gap, and edit explanations are derived from validated analysis state without sending chat history to a model.
 - Editor actions operate through typed commands.
 - Analysis, research, interview, and outreach results are stored separately from `CvDocument` and invalidated when their inputs change.
 - `AiDesignRecommendation` is stored separately until the user accepts it; it can change only validated presentation settings.
