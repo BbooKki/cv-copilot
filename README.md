@@ -22,6 +22,7 @@ This repository currently contains the product and engineering specification. Ap
 - `docs/ERD.md` — persistence model
 - `docs/CV_SCHEMA.md` — canonical CV data contract
 - `docs/AI_PROTOCOL.md` — local model input/output contract
+- `docs/DESIGN_SYSTEM.md` — monochrome product UI and paper CV styling
 - `docs/HACKATHON_SCOPE.md` — delivery scope and schedule
 - `IMPLEMENTATION_PROMPT.md` — end-to-end build prompt
 

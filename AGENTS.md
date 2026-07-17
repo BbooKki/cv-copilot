@@ -17,6 +17,7 @@ These instructions apply to the entire repository. Read the documents in `docs/`
 - `docs/CV_SCHEMA.md` defines the canonical CV document.
 - `docs/AI_PROTOCOL.md` defines model inputs and outputs.
 - `docs/ERD.md` defines persistence.
+- `docs/DESIGN_SYSTEM.md` defines the visual language and UI constraints.
 - When documents conflict, prefer this file, then `PRODUCT.md`, then the more specific document.
 
 ## CV integrity and AI safety
@@ -70,6 +71,16 @@ These instructions apply to the entire repository. Read the documents in `docs/`
 - Keep secrets out of source control. Update `.env.example` when adding configuration.
 - Preserve accessibility: labeled controls, keyboard operation, visible focus, semantic headings, and sufficient contrast.
 - Prefer focused components and explicit state transitions over large all-in-one files.
+
+## Visual design
+
+- Follow `docs/DESIGN_SYSTEM.md` for all application UI and template work.
+- Use the portfolio-inspired black, white, and neutral-gray system for the application shell.
+- Keep CV previews and exported PDFs paper-white by default with dark, high-contrast text.
+- Use `Inter` for UI body text, `Space Grotesk` for display hierarchy, and `JetBrains Mono` for compact technical metadata.
+- Prefer thin borders, subtle translucent surfaces, and inverse white primary actions over heavy shadows or colorful gradients.
+- Reserve green, amber, and red for functional status feedback; never turn them into brand colors.
+- Use uppercase monospace labels sparingly. Do not apply the portfolio's cyberpunk effects to CV content or dense editing screens.
 
 ## Verification
 

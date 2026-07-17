@@ -71,6 +71,19 @@ Centralize these values and make the AI feature removable through `VITE_GEMMA_EN
 - Templates must be print-safe and visually distinct, not placeholder boxes.
 - Use deterministic sample CV and job fixtures for tests and the demo.
 
+## Visual direction
+
+Follow `docs/DESIGN_SYSTEM.md` as a required implementation specification. Adapt the visual language from `/Users/thejoin/Desktop/dylan-islom-_-portfolio/src/index.css` and its Gemma interface without copying personal branding or portfolio content.
+
+- Build the application shell with a black canvas, white primary text, neutral-gray hierarchy, translucent white surfaces, and thin white borders.
+- Use `Inter` for body/UI, `Space Grotesk` for display headings, and `JetBrains Mono` for statuses, metrics, and compact labels.
+- Use white-on-black inverse primary buttons and restrained hover/focus treatments.
+- Keep the CV preview and exported PDF paper-white with dark text; the dark theme belongs to the editor, not the document.
+- Keep both CV templates professional and ATS-readable. Their distinction should come from typography, spacing, rules, columns, and restrained accents—not decorative cyberpunk effects.
+- Use responsive `Edit`, `Preview`, and `AI Review` modes on narrow screens.
+- Treat the model download and initialization UI as a premium technical moment, with progress, cache status, capability checks, and cancellation clearly visible.
+- Meet accessible contrast, keyboard focus, reduced-motion, and touch-target requirements.
+
 ## Job URL extraction
 
 Implement a Vercel-compatible server function rather than fetching arbitrary job pages directly from browser JavaScript. It must be a constrained extractor, not an open proxy:
