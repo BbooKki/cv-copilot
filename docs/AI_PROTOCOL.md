@@ -34,7 +34,30 @@ export type AiAnalysisRequest = {
 
 Before prompting, remove empty CV fields and cap job text to the useful content that fits the runtime context. Do not include conversation history unless required for the current operation.
 
-## Output envelope
+## Output envelopes
+
+Analysis uses two independent generations so a valid fit result remains useful if edit generation needs a retry. The first response contains only fit information:
+
+```ts
+export type AiFitAnalysisResult = {
+  protocolVersion: 1;
+  fitSummary: string;
+  matchedRequirements: Array<{ requirement: string; evidence: string; cvItemId?: string }>;
+  gaps: Array<{ requirement: string; explanation: string; resolvableFromExistingFacts: boolean }>;
+  warnings: string[];
+};
+```
+
+The second response contains only reviewable edits:
+
+```ts
+export type AiSuggestionResult = {
+  protocolVersion: 1;
+  suggestions: AiAnalysisResult["suggestions"];
+};
+```
+
+After both responses validate, the application combines them into the existing review model:
 
 ```ts
 export type AiAnalysisResult = {
@@ -86,7 +109,8 @@ export type AiAnalysisResult = {
 4. Display suggestions without changing the CV.
 5. Apply a suggestion only after user acceptance.
 6. Record an undo patch containing the previous value.
-7. If validation fails, show a recoverable error and offer one retry with a JSON-repair instruction.
+7. Preserve a validated fit response while generating suggestions.
+8. If fit validation fails, offer a smaller fit-only retry. If suggestion validation fails, preserve the fit result and offer a one-suggestion retry.
 
 ## Design recommendation protocol
 
@@ -110,12 +134,14 @@ export type AiDesignRecommendation = {
 
 ## Context strategy
 
-The known portfolio implementation uses a 4,096-token context. For this MVP:
+The runtime uses an 8,192-token context. Input and output still remain explicitly bounded because a larger context increases WebGPU memory use and does not guarantee valid JSON by itself.
 
-- Prefer one-shot analysis over long conversation.
+- Use two fresh, bounded generations: fit analysis first, then grounded edits. Do not accumulate conversation history.
 - Send compact JSON with empty fields removed.
 - Extract the job title, company, responsibilities, qualifications, and keywords before analysis when necessary.
 - Analyze sections independently if the combined request is too large.
 - Keep the system prompt concise and cap generated suggestions.
 - Keep analysis input within an explicit character budget: compact CV facts without contact or presentation metadata, plus at most 2,500 job-description characters.
-- Request at most three concise suggestions and reserve 1,200 output tokens. If the response is malformed, retain a local raw-output preview and offer a smaller structured retry.
+- Normal analysis generations have a 1,900-token hard output ceiling. The split prompts normally request at most two concise suggestions.
+- Repair generations use a 900-token ceiling and materially smaller schemas: fewer fit items or at most one suggestion.
+- Cap every generated string, including original and proposed CV text. If a response is malformed, retain a local raw-output preview and retry only the failed stage.

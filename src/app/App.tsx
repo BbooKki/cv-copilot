@@ -3,12 +3,12 @@ import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, 
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
-import {buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
+import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
 import {applySuggestion, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
-import {GEMMA_MODEL_BYTES} from '../gemma/protocol';
+import {GEMMA_MODEL_BYTES, type GemmaGenerationKind} from '../gemma/protocol';
 import {useGemma} from '../gemma/useGemma';
 import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
@@ -18,6 +18,7 @@ import {CloudPanel} from '../persistence/CloudPanel';
 
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
+type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
 
 export function App() {
   const [document, setDocument] = useState<CvDocument>(createBlankCv);
@@ -33,37 +34,76 @@ export function App() {
   const [jobError, setJobError] = useState('');
   const [analysis, setAnalysis] = useState<AiAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState('');
-  const [invalidAnalysisOutput, setInvalidAnalysisOutput] = useState<{message: string; raw: string} | null>(null);
+  const [invalidAnalysisOutput, setInvalidAnalysisOutput] = useState<{stage: 'fit' | 'suggestions'; message: string; raw: string} | null>(null);
   const [designRecommendation, setDesignRecommendation] = useState<AiDesignRecommendation | null>(null);
   const [designError, setDesignError] = useState('');
   const [handledSuggestions, setHandledSuggestions] = useState<Record<string, 'accepted' | 'rejected'>>({});
+  const [activeStage, setActiveStage] = useState<GenerationStage>(null);
   const saveTimer = useRef<number | null>(null);
-  const generationMode = useRef<'analysis' | 'design' | null>(null);
+  const activeStageRef = useRef<GenerationStage>(null);
+  const analysisRequestRef = useRef<AiAnalysisRequest | null>(null);
+  const fitAnalysisRef = useRef<AiFitAnalysisResult | null>(null);
+  const generateRef = useRef<(prompt: string, kind?: GemmaGenerationKind) => void>(() => undefined);
+
+  const changeActiveStage = useCallback((stage: GenerationStage) => {
+    activeStageRef.current = stage;
+    setActiveStage(stage);
+  }, []);
 
   const handleModelComplete = useCallback((raw: string) => {
-    const completedMode = generationMode.current;
-    generationMode.current = null;
+    const completedStage = activeStageRef.current;
     try {
-      if (completedMode === 'design') {
+      if (completedStage === 'design') {
         setDesignRecommendation(parseDesignRecommendation(raw));
         setDesignError('');
+        changeActiveStage(null);
         setCopilotMode('edit');
         setView('copilot');
-      } else {
-        setAnalysis(parseAiResult(raw));
+      } else if (completedStage === 'fit') {
+        const fit = parseFitAnalysisResult(raw);
+        const request = analysisRequestRef.current;
+        if (!request) throw new Error('The analysis request is no longer available.');
+        fitAnalysisRef.current = fit;
+        setAnalysis({...fit, suggestions: []});
         setHandledSuggestions({});
         setAnalysisError('');
         setInvalidAnalysisOutput(null);
+        changeActiveStage('suggestions');
         setCopilotMode('tailor');
         setView('copilot');
+        generateRef.current(buildSuggestionPrompt(request, fit), 'analysis');
+      } else if (completedStage === 'suggestions') {
+        const fit = fitAnalysisRef.current;
+        if (!fit) throw new Error('The completed fit analysis is no longer available.');
+        const suggestions = parseSuggestionResult(raw);
+        setAnalysis(combineAnalysis(fit, suggestions));
+        setHandledSuggestions({});
+        setAnalysisError('');
+        setInvalidAnalysisOutput(null);
+        changeActiveStage(null);
       }
     } catch (cause) {
       const message = cause instanceof Error ? `The local model returned invalid structured output: ${cause.message}` : 'Unable to validate the local model output.';
-      if (completedMode === 'design') setDesignError(message);
-      else { setAnalysisError(''); setInvalidAnalysisOutput({message, raw}); }
+      changeActiveStage(null);
+      if (completedStage === 'design') setDesignError(message);
+      else if (completedStage === 'fit' || completedStage === 'suggestions') {
+        setAnalysisError('');
+        setInvalidAnalysisOutput({stage: completedStage, message, raw});
+      }
     }
-  }, []);
+  }, [changeActiveStage]);
   const gemma = useGemma(handleModelComplete);
+
+  useEffect(() => { generateRef.current = gemma.generate; }, [gemma.generate]);
+
+  useEffect(() => {
+    if (gemma.status !== 'error' || !activeStageRef.current) return;
+    const failedStage = activeStageRef.current;
+    changeActiveStage(null);
+    if (failedStage === 'design') setDesignError(gemma.error);
+    else if (failedStage === 'suggestions') setAnalysisError(`Fit analysis is ready. Suggestion generation stopped: ${gemma.error}`);
+    else setAnalysisError(gemma.error);
+  }, [changeActiveStage, gemma.error, gemma.status]);
 
   useEffect(() => {
     let active = true;
@@ -104,18 +144,39 @@ export function App() {
 
   const runLocalAnalysis = (repair = false) => {
     if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
-    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
-    generationMode.current = 'analysis';
+    const request = repair && analysisRequestRef.current ? analysisRequestRef.current : {protocolVersion: 1 as const, cv: document, job: {source: jobMeta.sourceUrl ? 'url' as const : 'pasted' as const, sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
+    analysisRequestRef.current = request;
+    if (!repair) {
+      fitAnalysisRef.current = null;
+      setAnalysis(null);
+      setHandledSuggestions({});
+    }
+    changeActiveStage('fit');
     setAnalysisError('');
     setInvalidAnalysisOutput(null);
-    gemma.generate(buildAnalysisPrompt(request, {repair}));
+    gemma.generate(buildFitAnalysisPrompt(request, {repair}), repair ? 'analysis-repair' : 'analysis');
+  };
+
+  const retrySuggestions = () => {
+    const request = analysisRequestRef.current;
+    const fit = fitAnalysisRef.current;
+    if (!request || !fit) { setAnalysisError('Run the fit analysis again before requesting edits.'); return; }
+    changeActiveStage('suggestions');
+    setAnalysisError('');
+    setInvalidAnalysisOutput(null);
+    gemma.generate(buildSuggestionPrompt(request, fit, {repair: true}), 'analysis-repair');
   };
 
   const runDesignRecommendation = (direction: string) => {
-    generationMode.current = 'design';
+    changeActiveStage('design');
     setDesignRecommendation(null);
     setDesignError('');
-    gemma.generate(buildDesignPrompt(document, direction, jobText));
+    gemma.generate(buildDesignPrompt(document, direction, jobText), 'design');
+  };
+
+  const cancelGeneration = () => {
+    gemma.cancel();
+    changeActiveStage(null);
   };
 
   const updateSettings = (settings: Partial<CvDocument['settings']>) => updateDocument({...document, settings: {...document.settings, ...settings}});
@@ -134,6 +195,7 @@ export function App() {
   const formatBytes = (bytes: number) => `${(bytes / 1_000_000_000).toFixed(2)} GB`;
   const progress = Math.min(100, (gemma.progress.received / Math.max(gemma.progress.total, 1)) * 100);
   const cvHasContent = hasCvContent(document);
+  const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? 'Analyzing job fit…' : activeStage === 'suggestions' && gemma.status === 'generating' ? 'Preparing grounded edits…' : 'Analyze locally';
 
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
@@ -166,7 +228,7 @@ export function App() {
         {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
           <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
-          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && generationMode.current === 'design'} recommendation={designRecommendation} error={designError || (generationMode.current === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={gemma.cancel} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
+          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
           <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
@@ -178,12 +240,12 @@ export function App() {
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div>{gemma.status === 'initializing' && <p className="mt-3 text-[10px] leading-4 text-neutral-600">This can take up to 3 minutes. LiteRT may report an unavailable NPU while continuing normally with WebGPU.</p>}<button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
             {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
             {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
+            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
           </section>
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
-          {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} onRetry={() => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
-          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
+          {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
+          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
           <CloudPanel document={document} onLoad={updateDocument} />
         </div>}
       </aside>
@@ -193,8 +255,8 @@ export function App() {
   </main>;
 }
 
-function AnalysisPanel({analysis, document, handled, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
-  return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
+function AnalysisPanel({analysis, document, handled, generatingSuggestions, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
+  return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.matchedRequirements.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}{analysis.warnings.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 text-xs leading-5 text-amber-200/70">{warning}</p>)}</div>}{generatingSuggestions && <div className="mt-5 flex items-center gap-2 border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit analysis is ready. Preparing grounded edits…</span></div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
 }
 
 function StatusPill({icon, label, tone}: {icon: React.ReactNode; label: string; tone: 'neutral' | 'error'}) {

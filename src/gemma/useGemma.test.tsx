@@ -77,4 +77,14 @@ describe('useGemma', () => {
     expect(FakeWorker.instances[0].terminated).toBe(false);
     unmount();
   });
+
+  it('passes the requested generation kind to the worker', async () => {
+    const {result, unmount} = renderHook(() => useGemma(vi.fn()));
+    await act(async () => Promise.resolve());
+
+    act(() => result.current.generate('Recommend a design.', 'design'));
+
+    expect(FakeWorker.instances[0].messages).toContainEqual({type: 'generate', prompt: 'Recommend a design.', kind: 'design'});
+    unmount();
+  });
 });

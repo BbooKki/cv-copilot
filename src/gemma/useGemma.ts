@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {GEMMA_MODEL_BYTES, GEMMA_MODEL_URL, type GemmaToMainMessage, type MainToGemmaMessage} from './protocol';
+import {GEMMA_MODEL_BYTES, GEMMA_MODEL_URL, type GemmaGenerationKind, type GemmaToMainMessage, type MainToGemmaMessage} from './protocol';
 
 export type GemmaStatus = 'disabled' | 'unsupported' | 'idle' | 'downloading' | 'initializing' | 'ready' | 'generating' | 'error';
 export const GEMMA_INITIALIZATION_TIMEOUT_MS = 3 * 60 * 1000;
@@ -93,7 +93,7 @@ export function useGemma(onComplete: (raw: string) => void) {
     const worker = workerRef.current ?? startWorkerRef.current();
     worker?.postMessage({type: 'load', modelUrl: GEMMA_MODEL_URL, verifiedBytes: GEMMA_MODEL_BYTES} satisfies MainToGemmaMessage);
   }, [cached]);
-  const generate = useCallback((prompt: string) => { outputRef.current = ''; setError(''); setStatus('generating'); post({type: 'generate', prompt}); }, [post]);
+  const generate = useCallback((prompt: string, kind: GemmaGenerationKind = 'analysis') => { outputRef.current = ''; setError(''); setStatus('generating'); post({type: 'generate', prompt, kind}); }, [post]);
   const cancel = useCallback(() => {
     if (status === 'generating') { post({type: 'cancel-generation'}); return; }
     workerRef.current?.terminate();
