@@ -42,12 +42,16 @@ vi.mock('../ai/interviewClient', () => ({buildInterviewKit: (...args: unknown[])
 
 describe('split tailoring flow', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/app');
     gemmaHarness.complete = null;
     gemmaHarness.timeout = null;
     gemmaHarness.generate.mockReset();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+  });
 
   it('keeps valid fit analysis when Gemma returns a legacy object-shaped warning', async () => {
     render(<App />);
@@ -170,11 +174,15 @@ describe('split tailoring flow', () => {
 
 describe('cloud analysis (default)', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/app');
     cloudHarness.analyze.mockReset();
     interviewHarness.build.mockReset();
     try { localStorage.clear(); } catch { /* ignore */ }
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+  });
 
   it('asks for consent once, then runs cloud analysis and shows the fit summary', async () => {
     cloudHarness.analyze.mockResolvedValue({
@@ -264,7 +272,7 @@ describe('account routing', () => {
   });
 
   it('opens the dedicated account page and returns to the editor', async () => {
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/app');
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', {name: 'Sign in'}));
@@ -273,6 +281,30 @@ describe('account routing', () => {
 
     fireEvent.click(screen.getByRole('button', {name: 'Back to editor'}));
     expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/');
+    expect(window.location.pathname).toBe('/app');
+  });
+});
+
+describe('landing page', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('shows the marketing hero at the root path', async () => {
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
+    expect(screen.queryByRole('tab', {name: 'Tailor'})).not.toBeInTheDocument();
+  });
+
+  it('enters the editor from a call to action', async () => {
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+
+    fireEvent.click((await screen.findAllByRole('button', {name: /Start building/i}))[0]);
+    expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/app');
   });
 });

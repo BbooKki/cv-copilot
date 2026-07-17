@@ -27,6 +27,7 @@ import {STYLE_PRESETS} from '../templates/presets';
 import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
 import {AccountPage} from '../persistence/AccountPage';
+import {LandingPage} from '../landing/LandingPage';
 
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
@@ -43,18 +44,22 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigate = useCallback((path: '/' | '/account' | '/account/reset-password') => {
+  const navigate = useCallback((path: '/' | '/app' | '/account' | '/account/reset-password') => {
     window.history.pushState({}, '', path);
     setRoute(appRoute(path));
   }, []);
 
+  if (route === 'landing') {
+    return <LandingPage onStart={() => navigate('/app')} />;
+  }
+
   if (route !== 'workspace') {
     return <AccountPage
       passwordRecovery={route === 'password-recovery'}
-      onBack={() => navigate('/')}
+      onBack={() => navigate('/app')}
       onOpenDocument={async document => {
         await localResumeRepository.save(document);
-        navigate('/');
+        navigate('/app');
       }}
       onPasswordResetComplete={() => navigate('/account')}
     />;
@@ -637,10 +642,11 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   </main>;
 }
 
-function appRoute(pathname: string): 'workspace' | 'account' | 'password-recovery' {
+function appRoute(pathname: string): 'landing' | 'workspace' | 'account' | 'password-recovery' {
   if (pathname === '/account/reset-password') return 'password-recovery';
   if (pathname === '/account') return 'account';
-  return 'workspace';
+  if (pathname === '/app') return 'workspace';
+  return 'landing';
 }
 
 function ChatBubble({role, children}: {role: TailorMessage['role']; children: React.ReactNode}) {
