@@ -76,6 +76,7 @@ export type CvDocument = {
     templateId: "classic" | "modern";
     accentColor: string;
     pageSize: "A4" | "letter";
+    density: "comfortable" | "compact";
   };
   updatedAt: string;
 };
@@ -97,4 +98,5 @@ export type CvDocument = {
 - Reordering changes array order.
 - Deleting an entry requires a reversible local undo action.
 - Template switching changes only `settings.templateId`.
+- Density changes spacing and typography within a tested renderer; it never changes CV facts.
 - AI suggestions target a specific field path or stable item ID; they never replace the entire document.

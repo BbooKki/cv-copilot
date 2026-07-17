@@ -69,7 +69,7 @@ Centralize these values and make the AI feature removable through `VITE_GEMMA_EN
 - Use accessible semantic controls and responsive layouts.
 - Create a professional editor experience with a left editing panel and right live preview on desktop, adapting cleanly for mobile.
 - Templates must be print-safe and visually distinct, not placeholder boxes.
-- Use deterministic sample CV and job fixtures for tests and the demo.
+- Use deterministic fictional CV and job fixtures for automated tests only; do not expose them in the production interface.
 
 ## Visual direction
 
@@ -124,7 +124,7 @@ Account for the reference runtime's 4,096-token context. Remove empty data, boun
 
 Implement proportionate automated tests for:
 
-- CV schema validation and sample fixture;
+- CV schema validation and fictional test fixture;
 - local persistence;
 - suggestion validation, stale-target rejection, accept/reject, and undo;
 - template rendering and print-specific behavior where practical;

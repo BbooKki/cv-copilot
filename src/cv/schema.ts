@@ -60,6 +60,7 @@ export const cvDocumentSchema = z.object({
     templateId: z.enum(['classic', 'modern']),
     accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     pageSize: z.enum(['A4', 'letter']),
+    density: z.enum(['comfortable', 'compact']).default('comfortable'),
   }).strict(),
   updatedAt: z.string().datetime(),
 }).strict().superRefine((document, context) => {

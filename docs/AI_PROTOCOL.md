@@ -88,6 +88,26 @@ export type AiAnalysisResult = {
 6. Record an undo patch containing the previous value.
 7. If validation fails, show a recoverable error and offer one retry with a JSON-repair instruction.
 
+## Design recommendation protocol
+
+Gemma may recommend presentation settings but must not generate HTML, CSS, React, scripts, or a new renderer. The exact output is:
+
+```ts
+export type AiDesignRecommendation = {
+  protocolVersion: 1;
+  templateId: "classic" | "modern";
+  density: "comfortable" | "compact";
+  accentColor: "#262626" | "#1f2937" | "#334155" | "#3f3f46" | "#1f3a5f";
+  rationale: string;
+};
+```
+
+- The request may contain compact CV facts, an optional user design direction, and bounded untrusted job text.
+- Validate the output with an exact schema and fixed allowlists.
+- Display current and proposed settings with the rationale.
+- Apply all presentation changes only after explicit user acceptance and record them in the normal undo history.
+- Design recommendations never modify CV content or create a third template.
+
 ## Context strategy
 
 The known portfolio implementation uses a 4,096-token context. For this MVP:

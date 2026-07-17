@@ -3,7 +3,7 @@ import {cvDocumentSchema} from './schema';
 import {testCv} from './testFixture';
 
 describe('cvDocumentSchema', () => {
-  it('accepts the deterministic sample', () => {
+  it('accepts the deterministic fictional fixture', () => {
     expect(cvDocumentSchema.parse(testCv)).toEqual(testCv);
   });
 
@@ -15,5 +15,11 @@ describe('cvDocumentSchema', () => {
   it('rejects duplicate collection IDs', () => {
     const result = cvDocumentSchema.safeParse({...testCv, skills: [testCv.skills[0], testCv.skills[0]]});
     expect(result.success).toBe(false);
+  });
+
+  it('adds comfortable density to documents saved before density controls existed', () => {
+    const {density: _density, ...legacySettings} = testCv.settings;
+    const parsed = cvDocumentSchema.parse({...testCv, settings: legacySettings});
+    expect(parsed.settings.density).toBe('comfortable');
   });
 });

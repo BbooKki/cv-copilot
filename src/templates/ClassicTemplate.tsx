@@ -8,21 +8,22 @@ function dates(start?: string, end?: string, current?: boolean): string {
 }
 
 export const ClassicTemplate = memo(function ClassicTemplate({document}: TemplateProps) {
+  const compact = document.settings.density === 'compact';
   const experience = document.experience.filter(item => item.company || item.role || item.startDate || item.highlights.some(highlight => highlight.text));
   const education = document.education.filter(item => item.institution || item.qualification || item.field);
   const projects = document.projects.filter(item => item.name || item.description || item.technologies.length || item.highlights.some(highlight => highlight.text));
   const skills = document.skills.filter(item => item.name || item.keywords.length);
   const languages = document.languages.filter(item => item.language || item.proficiency);
   return (
-    <article className="paper p-[15mm] font-[Arial,sans-serif] text-[10.5pt] leading-[1.45]" data-page-size={document.settings.pageSize} aria-label="Classic CV preview">
-      <header className="border-b-2 border-neutral-900 pb-5 text-center">
+    <article className={`paper font-[Arial,sans-serif] ${compact ? 'p-[12mm] text-[9.5pt] leading-[1.35]' : 'p-[15mm] text-[10.5pt] leading-[1.45]'}`} data-page-size={document.settings.pageSize} aria-label="Classic CV preview">
+      <header className={`border-b-2 border-neutral-900 text-center ${compact ? 'pb-3' : 'pb-5'}`}>
         <h1 className="text-[26pt] font-bold tracking-[.05em] text-neutral-950">{document.basics.fullName}</h1>
         {document.basics.headline && <p className="mt-1 text-[12pt] text-neutral-600">{document.basics.headline}</p>}
         <p className="mt-3 text-[9pt] text-neutral-600">
           {[document.basics.email, document.basics.phone, document.basics.location, document.basics.website].filter(Boolean).join('  •  ')}
         </p>
       </header>
-      <div className="space-y-5 pt-5">
+      <div className={compact ? 'space-y-3 pt-3' : 'space-y-5 pt-5'}>
         {document.summary && <Section title="Profile"><p>{document.summary}</p></Section>}
         {experience.length > 0 && <Section title="Experience">
           <div className="space-y-4">{experience.map(item => <div key={item.id} className="break-inside-avoid">

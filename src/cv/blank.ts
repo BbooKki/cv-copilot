@@ -16,7 +16,7 @@ export function createBlankCv(): CvDocument {
     skills: [],
     languages: [],
     customSections: [],
-    settings: {templateId: 'modern', accentColor: '#262626', pageSize: 'A4'},
+    settings: {templateId: 'modern', accentColor: '#262626', pageSize: 'A4', density: 'comfortable'},
     updatedAt: new Date().toISOString(),
   };
 }

@@ -121,13 +121,16 @@ Suggested hierarchy:
 
 ## Layout
 
-- Desktop: centered CV preview on the left (`60-65%`) and a focused Copilot pane on the right (`35-40%`).
+- Laptop and desktop (`>=1024px`): centered, sticky CV preview on the left (`60-65%`) and a focused Copilot pane on the right (`35-40%`).
 - The Copilot pane provides clear `Edit` and `Tailor` modes within one continuous workspace. Structured fields remain the primary control for exact CV facts; local-AI output appears as reviewable suggestion cards.
 - Keep template, undo, local-save status, and PDF export in the top toolbar so they remain available from either mode.
 - Use a dark neutral workspace behind the white paper so page edges are obvious.
 - Keep the primary toolbar sticky when useful, with a black translucent background and bottom border.
 - Mobile: switch between `CV` and `Copilot` instead of squeezing both panes side by side.
 - The CV preview should preserve real page proportions and predictable print margins.
+- Present `Modern Mono` and `Classic ATS` as keyboard-operable visual cards in the Copilot pane. The selected card uses both an icon/label and inverse treatment; selection must not rely on color alone.
+- Layout density is a two-option control: `Comfortable` and `Compact`.
+- Gemma design recommendations use only the two tested templates, the two density modes, and the professional accent allowlist. Always show a rationale and `Apply`/`Dismiss` actions.
 
 ### Empty states and example content
 

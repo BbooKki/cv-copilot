@@ -28,16 +28,17 @@ A technically comfortable job seeker who already has work history and wants a fa
 4. Activate and load the local Gemma model.
 5. Analyze fit and generate targeted suggestions in the same pane.
 6. Accept or reject suggestions individually and see the preview update.
-7. Switch templates and verify the page preview.
+7. Choose between two visual template cards or ask Gemma for a constrained design recommendation.
 8. Export or print the CV as PDF.
 9. Optionally sign in and save the document to Supabase.
 
 ## Workspace model
 
-- Desktop uses two primary panes: a live PDF-style preview on the left and CV Copilot on the right.
+- Laptop and desktop widths from `1024px` use two primary panes: a sticky live PDF-style preview on the left and CV Copilot on the right.
 - The Copilot pane combines structured editing, job input, local-AI controls, and reviewable suggestion cards. It is not an unconstrained chatbot.
 - Selecting an editing section exposes its exact fields; users do not need to express precise facts such as dates or contact details conversationally.
 - AI changes always remain explicit accept/reject actions with original and proposed text.
+- Template choice is presented visually. Gemma may recommend a tested template, professional accent, and layout density, but it cannot generate or execute arbitrary markup or CSS.
 - Mobile switches between `CV` and `Copilot` views instead of compressing both panes.
 - A new user never sees another person's CV as their own document. Test fixtures are never available in the production interface.
 
@@ -51,13 +52,14 @@ A technically comfortable job seeker who already has work history and wants a fa
 - AI returns a structured analysis and field-specific suggestions.
 - Suggestions show original and proposed text and can be accepted or rejected independently.
 - AI never silently changes CV state.
+- AI design output is schema-validated and changes presentation only after explicit acceptance.
 - PDF/print output is legible, removes editor chrome, and avoids obvious section clipping.
 - Unsupported browsers receive an actionable fallback instead of a broken AI screen.
 - Signed-in users can save, list, open, update, and delete only their own cloud documents.
 
 ## Success demo
 
-The presenter opens a sample CV, pastes a real job posting, loads the already-cached local model, receives a fit summary and three grounded suggestions, accepts two, switches template, and exports a PDF. The presenter then shows that personal CV analysis happened locally.
+The presenter opens a prepared local draft, pastes a real job posting, loads the already-cached local model, receives a fit summary and three grounded suggestions, accepts two, requests and accepts a design recommendation, and exports a PDF. The presenter then shows that personal CV analysis happened locally.
 
 ## Non-goals
 

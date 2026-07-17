@@ -1,5 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Square, WandSparkles, X} from 'lucide-react';
+import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
+import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
 import {applySuggestion, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
@@ -10,6 +12,7 @@ import {useGemma} from '../gemma/useGemma';
 import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
 import {CvPreview} from '../templates/CvPreview';
+import {TemplatePicker} from '../templates/TemplatePicker';
 import {CloudPanel} from '../persistence/CloudPanel';
 
 type View = 'cv' | 'copilot';
@@ -29,18 +32,32 @@ export function App() {
   const [jobError, setJobError] = useState('');
   const [analysis, setAnalysis] = useState<AiAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState('');
+  const [designRecommendation, setDesignRecommendation] = useState<AiDesignRecommendation | null>(null);
+  const [designError, setDesignError] = useState('');
   const [handledSuggestions, setHandledSuggestions] = useState<Record<string, 'accepted' | 'rejected'>>({});
   const saveTimer = useRef<number | null>(null);
+  const generationMode = useRef<'analysis' | 'design' | null>(null);
 
   const handleModelComplete = useCallback((raw: string) => {
+    const completedMode = generationMode.current;
+    generationMode.current = null;
     try {
-      setAnalysis(parseAiResult(raw));
-      setHandledSuggestions({});
-      setAnalysisError('');
-      setCopilotMode('tailor');
-      setView('copilot');
+      if (completedMode === 'design') {
+        setDesignRecommendation(parseDesignRecommendation(raw));
+        setDesignError('');
+        setCopilotMode('edit');
+        setView('copilot');
+      } else {
+        setAnalysis(parseAiResult(raw));
+        setHandledSuggestions({});
+        setAnalysisError('');
+        setCopilotMode('tailor');
+        setView('copilot');
+      }
     } catch (cause) {
-      setAnalysisError(cause instanceof Error ? `The local model returned invalid structured output: ${cause.message}` : 'Unable to validate the local model output.');
+      const message = cause instanceof Error ? `The local model returned invalid structured output: ${cause.message}` : 'Unable to validate the local model output.';
+      if (completedMode === 'design') setDesignError(message);
+      else setAnalysisError(message);
     }
   }, []);
   const gemma = useGemma(handleModelComplete);
@@ -85,7 +102,24 @@ export function App() {
   const runLocalAnalysis = () => {
     if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
     const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 5, language: 'en'}};
+    generationMode.current = 'analysis';
+    setAnalysisError('');
     gemma.generate(buildAnalysisPrompt(request));
+  };
+
+  const runDesignRecommendation = (direction: string) => {
+    generationMode.current = 'design';
+    setDesignRecommendation(null);
+    setDesignError('');
+    gemma.generate(buildDesignPrompt(document, direction, jobText));
+  };
+
+  const updateSettings = (settings: Partial<CvDocument['settings']>) => updateDocument({...document, settings: {...document.settings, ...settings}});
+
+  const acceptDesignRecommendation = () => {
+    if (!designRecommendation) return;
+    updateSettings({templateId: designRecommendation.templateId, density: designRecommendation.density, accentColor: designRecommendation.accentColor});
+    setDesignRecommendation(null);
   };
 
   const accept = (suggestion: AiAnalysisResult['suggestions'][number]) => {
@@ -107,16 +141,16 @@ export function App() {
           <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-30" disabled={!cvHasContent} onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
         </div>
       </div>
-      <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 xl:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
+      <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 lg:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
     </header>
 
-    <div className="print-root mx-auto grid max-w-[1800px] xl:grid-cols-[minmax(0,1fr)_minmax(390px,40%)]">
-      <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:px-10 ${view !== 'cv' ? 'hidden xl:block' : ''}`} aria-label="CV preview workspace">
-        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports.</p></div><div className="flex items-center gap-2"><select aria-label="Template" className="focus-ring border border-white/10 bg-black px-3 py-2 text-xs text-neutral-300" value={document.settings.templateId} onChange={event => updateDocument({...document, settings: {...document.settings, templateId: event.target.value as 'classic' | 'modern'}})}><option value="modern">Modern Mono</option><option value="classic">Classic ATS</option></select><select aria-label="Page size" className="focus-ring border border-white/10 bg-black px-3 py-2 text-xs text-neutral-300" value={document.settings.pageSize} onChange={event => updateDocument({...document, settings: {...document.settings, pageSize: event.target.value as 'A4' | 'letter'}})}><option value="A4">A4</option><option value="letter">Letter</option></select><input aria-label="Accent color" type="color" className="focus-ring h-9 w-10 border border-white/10 bg-black p-1" value={document.settings.accentColor} onChange={event => updateDocument({...document, settings: {...document.settings, accentColor: event.target.value}})} /></div></div>
+    <div className="print-root mx-auto grid max-w-[1800px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,40%)]">
+      <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:overflow-y-auto lg:px-6 ${view !== 'cv' ? 'hidden lg:block' : ''}`} aria-label="CV preview workspace">
+        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{document.settings.templateId === 'modern' ? 'Modern Mono' : 'Classic ATS'} · {document.settings.density}</p></div>
         <div className="paper-frame">{cvHasContent ? <CvPreview document={document} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
       </section>
 
-      <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black xl:h-[calc(100vh-65px)] xl:overflow-y-auto ${view !== 'copilot' ? 'hidden xl:block' : ''}`} aria-label="CV Copilot">
+      <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black lg:h-[calc(100vh-65px)] lg:overflow-y-auto ${view !== 'copilot' ? 'hidden lg:block' : ''}`} aria-label="CV Copilot">
         <div className="sticky top-0 z-10 border-b border-white/10 bg-black/95 p-4 backdrop-blur-xl md:p-5">
           <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private assistant</p><h2 className="mt-1 font-display text-xl font-semibold">CV Copilot</h2></div><button className="focus-ring p-2 text-neutral-500 hover:text-white md:hidden" onClick={undo} disabled={!undoStack.length}><RotateCcw size={18} /></button></div>
           <div className="mt-4 grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
@@ -125,8 +159,10 @@ export function App() {
           </div>
         </div>
 
-        {copilotMode === 'edit' ? <div className="p-4 md:p-5">
+        {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
+          <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
+          <DesignAssistantPanel settings={document.settings} status={gemma.status} cached={gemma.cached} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && generationMode.current === 'design'} recommendation={designRecommendation} error={designError || (generationMode.current === 'design' ? gemma.error : '')} onLoad={gemma.load} onGenerate={runDesignRecommendation} onCancel={gemma.cancel} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
           <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>

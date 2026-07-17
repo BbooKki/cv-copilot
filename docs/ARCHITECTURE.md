@@ -52,16 +52,17 @@ src/
 ## State model
 
 - `CvDocument` is the only source of truth for resume content.
-- The initial document is structurally valid but contains no personal or career facts. Sample fixtures are test/demo dependencies and are never the implicit production state.
+- The initial document is structurally valid but contains no personal or career facts. Fictional fixtures are test-only dependencies and never enter the production interface.
 - Editor actions operate through typed commands.
 - `AiAnalysis` is stored separately from `CvDocument`.
+- `AiDesignRecommendation` is stored separately until the user accepts it; it can change only validated presentation settings.
 - Accepting a suggestion creates a reversible patch and updates `CvDocument`.
 - Template choice changes presentation only, never content.
 - Local persistence is available immediately; cloud persistence is an optional adapter.
 
 ## Runtime flow
 
-1. Load a valid local document or create a blank document. Load an example only after an explicit user action.
+1. Load a valid local document or create a blank document.
 2. Validate it against the CV schema.
 3. Render the left-hand preview and right-hand Copilot controls from the same object.
 4. Normalize pasted job text or retrieve it through `/api/extract-job`.
@@ -69,6 +70,7 @@ src/
 6. Ask Gemma for JSON matching `AI_PROTOCOL.md`.
 7. Parse and validate the JSON; display errors without mutating the CV.
 8. Apply only user-approved suggestion patches.
+9. For design requests, validate Gemma output against the fixed template, density, and accent allowlists, display the rationale, and apply only after explicit acceptance.
 
 ## Deployment strategy
 

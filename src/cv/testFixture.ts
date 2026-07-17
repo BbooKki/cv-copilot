@@ -53,6 +53,6 @@ export const testCv: CvDocument = {
   ],
   languages: [{id: 'lang-english', language: 'English', proficiency: 'Native'}],
   customSections: [],
-  settings: {templateId: 'modern', accentColor: '#262626', pageSize: 'A4'},
+  settings: {templateId: 'modern', accentColor: '#262626', pageSize: 'A4', density: 'comfortable'},
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

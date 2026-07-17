@@ -64,6 +64,10 @@ button:disabled { cursor: not-allowed; }
   .paper-frame { --paper-scale: .78; width: 619px; min-height: 875px; }
 }
 
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .paper-frame { --paper-scale: .58; width: 460px; min-height: 651px; }
+}
+
 @media (max-width: 760px) {
   .paper-frame { --paper-scale: .44; width: 349px; min-height: 494px; }
 }
