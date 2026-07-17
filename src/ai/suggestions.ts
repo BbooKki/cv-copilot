@@ -66,7 +66,7 @@ export function applySuggestion(document: CvDocument, suggestion: AiSuggestion):
   return {document: next, patch: {suggestionId: suggestion.id, previous: suggestion.originalText, next: suggestion.proposedText}};
 }
 
-function collectEvidenceIds(document: CvDocument): Set<string> {
+export function collectEvidenceIds(document: CvDocument): Set<string> {
   const ids = new Set<string>();
   for (const collection of [document.experience, document.education, document.projects, document.skills, document.languages, document.customSections]) {
     for (const item of collection) {
@@ -78,7 +78,7 @@ function collectEvidenceIds(document: CvDocument): Set<string> {
   return ids;
 }
 
-function hasOnlyKnownNumbers(document: CvDocument, proposedText: string): boolean {
+export function hasOnlyKnownNumbers(document: CvDocument, proposedText: string): boolean {
   const numberPattern = /\b\d+(?:[.,]\d+)*(?:%|x)?\b/gi;
   const knownNumbers = new Set((JSON.stringify(document).match(numberPattern) ?? []).map(value => value.toLowerCase()));
   return (proposedText.match(numberPattern) ?? []).every(value => knownNumbers.has(value.toLowerCase()));

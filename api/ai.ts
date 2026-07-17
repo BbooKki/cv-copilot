@@ -3,6 +3,7 @@ import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
+import {buildInterviewKitPrompt, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {generateGrounded, generateText, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
@@ -26,9 +27,21 @@ const analyzeRequestSchema = z.object({
   options: z.object({maxSuggestions: z.number().int().min(0).max(3), language: z.string().max(20)}).strict(),
 });
 
+const interviewKitRequestSchema = z.object({
+  protocolVersion: z.literal(1),
+  cv: cvDocumentSchema,
+  job: z.object({title: z.string().max(300).optional(), company: z.string().max(200).optional(), text: z.string().min(1).max(20_000)}).strict(),
+  context: z.object({
+    fitSummary: z.string().max(400).optional(),
+    gaps: z.array(z.string().max(240)).max(4).optional(),
+    companyPriorities: z.array(z.string().max(240)).max(5).optional(),
+  }).strict().optional(),
+});
+
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
   z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
+  z.object({operation: z.literal('build-interview-kit'), request: interviewKitRequestSchema}).strict(),
 ]);
 
 const MAX_BODY_BYTES = 200_000;
@@ -54,6 +67,12 @@ export default async function handler(request: IncomingMessage, response: Server
       response.end(JSON.stringify(brief));
       return;
     }
+    if (body.operation === 'build-interview-kit') {
+      const kit = await interviewKit(body.request);
+      response.statusCode = 200;
+      response.end(JSON.stringify(kit));
+      return;
+    }
     response.statusCode = 400;
     response.end(JSON.stringify({error: 'Unsupported operation.', code: 'unknown'}));
   } catch (cause) {
@@ -73,6 +92,22 @@ async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
       return parseAiResult(retry);
     } catch {
       throw new GeminiError('invalid-output', 'The AI returned an unusable response. Please try again.', 502);
+    }
+  }
+}
+
+async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit> {
+  const prompt = buildInterviewKitPrompt(request);
+  const raw = await generateText(prompt, {json: true, temperature: 0.3, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  try {
+    return parseInterviewKit(raw);
+  } catch {
+    const repairPrompt = `${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON with every array and object closed.`;
+    const retry = await generateText(repairPrompt, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+    try {
+      return parseInterviewKit(retry);
+    } catch {
+      throw new GeminiError('invalid-output', 'The AI returned an unusable interview kit. Please try again.', 502);
     }
   }
 }

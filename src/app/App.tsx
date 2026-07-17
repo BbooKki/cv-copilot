@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, Mic, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
@@ -8,6 +8,8 @@ import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, 
 import {analyzeWithCloud} from '../ai/cloudClient';
 import {researchCompany} from '../ai/researchClient';
 import type {GroundedCompanyBrief} from '../ai/research';
+import {buildInterviewKit} from '../ai/interviewClient';
+import {assertInterviewKitGrounded, type InterviewKit} from '../ai/interview';
 import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
@@ -43,6 +45,9 @@ export function App() {
   const [companyBrief, setCompanyBrief] = useState<GroundedCompanyBrief | null>(null);
   const [researchBusy, setResearchBusy] = useState(false);
   const [researchError, setResearchError] = useState('');
+  const [interviewKit, setInterviewKit] = useState<InterviewKit | null>(null);
+  const [interviewBusy, setInterviewBusy] = useState(false);
+  const [interviewError, setInterviewError] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
@@ -237,6 +242,28 @@ export function App() {
     }
   }, [companyName, roleTitle, jobText]);
 
+  const runInterviewKit = useCallback(async () => {
+    setInterviewBusy(true);
+    setInterviewError('');
+    setInterviewKit(null);
+    try {
+      const kit = await buildInterviewKit({
+        protocolVersion: 1,
+        cv: document,
+        job: {title: roleTitle.trim() || jobMeta.title, company: companyName.trim() || jobMeta.company, text: jobText},
+        context: analysis
+          ? {fitSummary: analysis.fitSummary, gaps: analysis.gaps.map(gap => gap.requirement), companyPriorities: companyBrief?.priorities}
+          : undefined,
+      });
+      assertInterviewKitGrounded(document, kit);
+      setInterviewKit(kit);
+    } catch (cause) {
+      setInterviewError(cause instanceof Error ? cause.message : 'Interview kit generation failed.');
+    } finally {
+      setInterviewBusy(false);
+    }
+  }, [document, roleTitle, companyName, jobText, jobMeta, analysis, companyBrief]);
+
   const grantCloudConsent = () => {
     try { localStorage.setItem('cvcopilot.cloudConsent', 'granted'); } catch { /* storage unavailable */ }
     setCloudConsent(true);
@@ -383,6 +410,17 @@ export function App() {
               <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{companyBrief.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
             </div>}
           </section>}
+          {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="prepare-title">
+            <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Mic size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Prepare · grounded</p><h3 id="prepare-title" className="mt-1 font-semibold">Interview kit</h3></div></div>
+            <p className="mt-3 text-xs leading-5 text-neutral-500">Likely questions, smart questions to ask, and a 30-second pitch — drawn only from your CV. The pitch is rejected if it invents anything not in your CV.</p>
+            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={interviewBusy} onClick={() => void runInterviewKit()}>{interviewBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mic size={14} />{interviewKit ? 'Regenerate interview kit' : 'Prepare interview kit'}</>}</button>
+            {interviewError && <p className="mt-3 text-xs leading-5 text-amber-300">{interviewError}</p>}
+            {interviewKit && <div className="mt-4 space-y-4">
+              <div className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">30-second pitch</p><CopyButton text={interviewKit.pitch.text} /></div><p className="mt-2 text-sm leading-6 text-neutral-200">{interviewKit.pitch.text}</p></div>
+              <div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Likely questions</p><ul className="mt-2 space-y-3">{interviewKit.questions.map((item, index) => <li key={index} className="border border-white/10 bg-black p-3"><p className="text-sm leading-5 text-neutral-200">{item.question}</p><p className="mt-1 text-xs leading-5 text-neutral-500">{item.rationale}</p></li>)}</ul></div>
+              <div><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Questions to ask them</p><CopyButton text={interviewKit.questionsToAsk.join('\n')} label="Copy all" /></div><ul className="mt-2 space-y-1">{interviewKit.questionsToAsk.map((question, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {question}</li>)}</ul></div>
+            </div>}
+          </section>}
           <CloudPanel document={document} onLoad={updateDocument} />
         </div>}
       </aside>
@@ -394,6 +432,16 @@ export function App() {
 
 function AnalysisPanel({analysis, document, handled, generatingSuggestions, generationElapsedLabel, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; generationElapsedLabel: string; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
   return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.matchedRequirements.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}{analysis.warnings.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 text-xs leading-5 text-amber-200/70">{warning}</p>)}</div>}{generatingSuggestions && <div className="mt-5 flex items-center gap-2 border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit analysis is ready. Preparing one grounded edit · {generationElapsedLabel}</span></div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
+}
+
+function CopyButton({text, label}: {text: string; label?: string}) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1_500);
+  };
+  return <button className="focus-ring inline-flex items-center gap-1 border border-white/10 px-2 py-1 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={copy}>{copied ? <Check size={11} /> : <Copy size={11} />}{copied ? 'Copied' : label ?? 'Copy'}</button>;
 }
 
 function formatElapsed(seconds: number): string {
