@@ -22,4 +22,9 @@ describe('cvDocumentSchema', () => {
     const parsed = cvDocumentSchema.parse({...testCv, settings: legacySettings});
     expect(parsed.settings.density).toBe('comfortable');
   });
+
+  it.each(['classic', 'modern', 'sidebar', 'minimal'] as const)('accepts the %s template identifier', templateId => {
+    const result = cvDocumentSchema.safeParse({...testCv, settings: {...testCv.settings, templateId}});
+    expect(result.success).toBe(true);
+  });
 });

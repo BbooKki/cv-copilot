@@ -18,7 +18,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - Truthful: suggestions may improve wording and prioritization but cannot manufacture facts.
 - Flexible: fast consented cloud analysis is the default, with optional on-device Private Mode.
 - Controllable: every suggestion is reviewable, reversible, and editable.
-- Presentable: two strong templates and reliable PDF output.
+- Presentable: four strong, visually distinct templates and reliable PDF output.
 
 ## Primary journey
 
@@ -29,7 +29,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 5. Analyze fit, review evidence, and accept or reject field-level suggestions.
 6. Optionally research the company with user-triggered Google grounding and claim-level citations.
 7. Generate likely interview questions and a deterministic CV-derived pitch; create quota-free outreach templates locally.
-8. Edit supported narrative fields directly from the paper preview and select one of two tested templates.
+8. Edit supported narrative fields directly from the paper preview and select one of four tested templates.
 9. Export or print the CV as PDF, then optionally sign in and, with premium access, save the editable CV to Supabase.
 
 ## Workspace model
@@ -48,7 +48,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 ## MVP acceptance criteria
 
 - The editor works without authentication and survives refresh using local persistence.
-- The same canonical CV renders correctly in two visually distinct templates.
+- The same canonical CV renders correctly in four visually distinct templates: Classic ATS, Modern Editorial, Professional Sidebar, and Minimal Technical.
 - Users can reorder and edit repeatable experience, education, project, and skill entries.
 - Job input supports URL extraction and pasted-text fallback.
 - Cloud analysis is server-side, bounded, rate-limited, and schema-validated; Private Mode remains off the UI thread.
@@ -76,5 +76,5 @@ The presenter opens a prepared local draft, pastes a job posting, consents to cl
 - DOCX parsing or export
 - Payments or subscriptions
 - Collaborative editing
-- More than two production-quality templates
+- User-authored, generated, or marketplace templates
 - Employee discovery, personal-profile aggregation, or inferred contact details

@@ -3,6 +3,7 @@ import {describe, expect, it} from 'vitest';
 
 const initialMigration = readFileSync('supabase/migrations/20260717063447_initial_schema.sql', 'utf8');
 const entitlementMigration = readFileSync('supabase/migrations/20260717171514_add_account_entitlements.sql', 'utf8');
+const templateMigration = readFileSync('supabase/migrations/20260717180621_expand_resume_template_allowlist.sql', 'utf8');
 
 describe('Supabase migration security contract', () => {
   it('keeps resume reads and deletes owner-only', () => {
@@ -22,5 +23,9 @@ describe('Supabase migration security contract', () => {
     expect(entitlementMigration).toMatch(/resumes_insert_premium_own[\s\S]*entitlement\.plan = 'premium'[\s\S]*entitlement\.expires_at > now\(\)/);
     expect(entitlementMigration).toMatch(/resumes_update_premium_own[\s\S]*using \([\s\S]*with check \(/);
     expect(entitlementMigration.match(/\(select auth\.uid\(\)\) = user_id/g)).toHaveLength(4);
+  });
+
+  it('allows every fixed production template in persisted resumes', () => {
+    expect(templateMigration).toContain("template_id in ('classic', 'modern', 'sidebar', 'minimal')");
   });
 });

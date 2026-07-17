@@ -57,7 +57,7 @@ export const cvDocumentSchema = z.object({
     items: z.array(z.object({id, heading: optionalText, text: z.string().trim().min(1)}).strict()),
   }).strict()),
   settings: z.object({
-    templateId: z.enum(['classic', 'modern']),
+    templateId: z.enum(['classic', 'modern', 'sidebar', 'minimal']),
     accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     pageSize: z.enum(['A4', 'letter']),
     density: z.enum(['comfortable', 'compact']).default('comfortable'),

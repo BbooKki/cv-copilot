@@ -129,9 +129,13 @@ Suggested hierarchy:
 - Keep the primary toolbar sticky when useful, with a black translucent background and bottom border.
 - Mobile: switch between `CV` and `Copilot` instead of squeezing both panes side by side.
 - The CV preview should preserve real page proportions and predictable print margins.
-- Present `Modern Mono` and `Classic ATS` as keyboard-operable visual cards in the Copilot pane. The selected card uses both an icon/label and inverse treatment; selection must not rely on color alone.
+- Present all four fixed templates as keyboard-operable visual cards in the Copilot pane. The selected card uses both an icon/label and inverse treatment; selection must not rely on color alone.
+- `Classic ATS` is an elegant single-column document with conservative typography and a highly predictable reading order.
+- `Modern Editorial` uses an asymmetric header, editorial typography, and a controlled secondary column without sacrificing legibility.
+- `Professional Sidebar` uses a restrained accent sidebar for contact details, skills, education, and languages.
+- `Minimal Technical` uses compact sans and monospace hierarchy, numbered sections, and precise rules for an understated technical profile.
 - Layout density is a two-option control: `Comfortable` and `Compact`.
-- Gemma design recommendations use only the two tested templates, the two density modes, and the professional accent allowlist. Always show a rationale and `Apply`/`Dismiss` actions.
+- Gemma design recommendations use only the four tested templates, the two density modes, and the professional accent allowlist. Always show a rationale and `Apply`/`Dismiss` actions.
 
 ### Empty states and example content
 

@@ -13,10 +13,16 @@ describe('AI design protocol', () => {
     expect(() => parseDesignRecommendation('{"protocolVersion":1,"templateId":"modern","density":"comfortable","accentColor":"#ff00ff","rationale":"Bright","css":"body{}"}')).toThrow();
   });
 
+  it('accepts recommendations for the expanded fixed template set', () => {
+    const result = parseDesignRecommendation('{"protocolVersion":1,"templateId":"sidebar","density":"comfortable","accentColor":"#1f2937","rationale":"The structured sidebar separates supporting details from the main work history."}');
+    expect(result.templateId).toBe('sidebar');
+  });
+
   it('builds a bounded structural prompt without CV biography text', () => {
     const prompt = buildDesignPrompt(testCv, 'Conservative and concise', 'Product engineer role');
     expect(prompt).toContain('"experienceCount":1');
     expect(prompt).toContain('Conservative and concise');
+    expect(prompt).toContain('classic|modern|sidebar|minimal');
     expect(prompt).not.toContain(testCv.basics.fullName);
   });
 

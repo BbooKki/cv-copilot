@@ -4,10 +4,15 @@ import {testCv} from '../cv/testFixture';
 import {CvPreview} from './CvPreview';
 
 describe('CvPreview', () => {
-  it('renders modern and classic templates from the same document', () => {
-    const {rerender} = render(<CvPreview document={testCv} />);
-    expect(screen.getByLabelText('Modern CV preview')).toHaveTextContent('Alex Morgan');
-    rerender(<CvPreview document={{...testCv, settings: {...testCv.settings, templateId: 'classic'}}} />);
-    expect(screen.getByLabelText('Classic CV preview')).toHaveTextContent('Alex Morgan');
+  it.each([
+    ['classic', 'Classic ATS CV preview'],
+    ['modern', 'Modern Editorial CV preview'],
+    ['sidebar', 'Professional Sidebar CV preview'],
+    ['minimal', 'Minimal Technical CV preview'],
+  ] as const)('renders the %s template from the canonical document', (templateId, accessibleName) => {
+    render(<CvPreview document={{...testCv, settings: {...testCv.settings, templateId}}} />);
+    expect(screen.getByLabelText(accessibleName)).toHaveTextContent('Alex Morgan');
+    expect(screen.getByLabelText(accessibleName)).toHaveTextContent('Northstar Labs');
+    expect(screen.getByLabelText(accessibleName)).toHaveTextContent('Atlas Dashboard');
   });
 });

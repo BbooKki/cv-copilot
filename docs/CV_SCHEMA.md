@@ -73,7 +73,7 @@ export type CvDocument = {
     items: Array<{ id: string; heading?: string; text: string }>;
   }>;
   settings: {
-    templateId: "classic" | "modern";
+    templateId: "classic" | "modern" | "sidebar" | "minimal";
     accentColor: string;
     pageSize: "A4" | "letter";
     density: "comfortable" | "compact";
@@ -99,5 +99,6 @@ export type CvDocument = {
 - Reordering changes array order.
 - Deleting an entry requires a reversible local undo action.
 - Template switching changes only `settings.templateId`.
+- Template identifiers refer only to the four tested renderers: Classic ATS, Modern Editorial, Professional Sidebar, and Minimal Technical.
 - Density changes spacing and typography within a tested renderer; it never changes CV facts.
 - AI suggestions target a specific field path or stable item ID; they never replace the entire document.

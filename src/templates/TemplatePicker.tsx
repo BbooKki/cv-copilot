@@ -1,5 +1,6 @@
 import {Check} from 'lucide-react';
 import type {CvDocument} from '../cv/schema';
+import {TEMPLATE_OPTIONS} from './templateCatalog';
 
 type Settings = CvDocument['settings'];
 type Props = {
@@ -10,16 +11,11 @@ type Props = {
   onAccentChange: (accentColor: string) => void;
 };
 
-const templates = [
-  {id: 'modern', name: 'Modern Mono', description: 'Two-column hierarchy with a strong header.'},
-  {id: 'classic', name: 'Classic ATS', description: 'Conservative single-column document flow.'},
-] as const;
-
 export function TemplatePicker({settings, onTemplateChange, onDensityChange, onPageSizeChange, onAccentChange}: Props) {
   return <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="template-picker-title">
     <div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Presentation</p><h3 id="template-picker-title" className="mt-1 font-display text-lg font-semibold">Choose a template</h3></div>
     <div className="mt-4 grid grid-cols-2 gap-3">
-      {templates.map(template => {
+      {TEMPLATE_OPTIONS.map(template => {
         const selected = settings.templateId === template.id;
         return <button key={template.id} type="button" aria-pressed={selected} className={`focus-ring relative border p-3 text-left transition ${selected ? 'border-white bg-white text-black' : 'border-white/10 bg-black text-neutral-300 hover:border-white/30'}`} onClick={() => onTemplateChange(template.id)}>
           {selected && <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center bg-black text-white" aria-hidden="true"><Check size={12} /></span>}
@@ -41,6 +37,9 @@ function TemplateMiniature({templateId, selected}: {templateId: Settings['templa
   const ink = selected ? 'bg-black' : 'bg-neutral-500';
   const quiet = selected ? 'bg-neutral-400' : 'bg-neutral-800';
   return <span className={`block h-24 border p-2 ${selected ? 'border-black/20 bg-neutral-100' : 'border-white/10 bg-neutral-950'}`} aria-hidden="true">
-    {templateId === 'modern' ? <span className="grid h-full grid-cols-[32%_1fr] gap-2"><span className={`block ${quiet}`} /><span className="block"><span className={`mb-2 block h-4 ${ink}`} /><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-1 block h-1 w-4/5 ${quiet}`} /><span className={`mt-3 mb-1 block h-1 w-full ${quiet}`} /><span className={`block h-1 w-3/5 ${quiet}`} /></span></span> : <span className="block h-full"><span className={`mx-auto mb-2 block h-2 w-2/3 ${ink}`} /><span className={`mb-3 block h-px w-full ${quiet}`} /><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-1 block h-1 w-5/6 ${quiet}`} /><span className={`mt-3 mb-1 block h-px w-full ${quiet}`} /><span className={`block h-1 w-3/4 ${quiet}`} /></span>}
+    {templateId === 'classic' && <span className="block h-full border-t-2 border-current pt-2"><span className={`mb-1 block h-2 w-1/2 ${ink}`} /><span className={`mb-3 block h-1 w-1/3 ${quiet}`} /><span className={`mb-1 block h-px w-full ${quiet}`} /><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-3 block h-1 w-5/6 ${quiet}`} /><span className={`mb-1 block h-px w-full ${quiet}`} /><span className={`block h-1 w-3/4 ${quiet}`} /></span>}
+    {templateId === 'modern' && <span className="block h-full"><span className="grid grid-cols-[1fr_30%] gap-2 border-b border-current pb-2"><span className={`block h-4 ${ink}`} /><span className={`block h-4 ${quiet}`} /></span><span className="mt-2 grid grid-cols-[1fr_32%] gap-2"><span><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-1 block h-1 w-5/6 ${quiet}`} /><span className={`mt-2 block h-1 w-full ${quiet}`} /></span><span className={`block h-10 ${quiet}`} /></span></span>}
+    {templateId === 'sidebar' && <span className="grid h-full grid-cols-[31%_1fr] gap-2"><span className={`block ${ink}`} /><span className="pt-2"><span className={`mb-1 block h-3 w-4/5 ${ink}`} /><span className={`mb-4 block h-1 w-1/2 ${quiet}`} /><span className={`mb-1 block h-px w-full ${quiet}`} /><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`block h-1 w-3/4 ${quiet}`} /></span></span>}
+    {templateId === 'minimal' && <span className="block h-full border-y border-current py-2"><span className={`mb-3 block h-3 w-1/2 ${ink}`} /><span className="grid grid-cols-[22%_1fr] gap-2"><span className={`block h-1 ${ink}`} /><span><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-3 block h-1 w-5/6 ${quiet}`} /></span><span className={`block h-1 ${ink}`} /><span><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`block h-1 w-2/3 ${quiet}`} /></span></span></span>}
   </span>;
 }
