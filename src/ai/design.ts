@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import type {CvDocument} from '../cv/schema';
+import {buildUntrustedPromptEnvelope} from './protocol';
 
 export const PROFESSIONAL_ACCENTS = ['#262626', '#1f2937', '#334155', '#3f3f46', '#1f3a5f'] as const;
 
@@ -40,10 +41,10 @@ ${JSON.stringify(structure)}
 CV_STRUCTURE_END
 
 USER_DIRECTION_BEGIN
-${direction.trim().slice(0, 500) || 'No additional direction provided.'}
+${buildUntrustedPromptEnvelope(direction.trim() || 'No additional direction provided.', 500)}
 USER_DIRECTION_END
 
 JOB_DATA_BEGIN
-${jobText.trim().slice(0, 2_000) || 'No job data provided.'}
+${buildUntrustedPromptEnvelope(jobText.trim() || 'No job data provided.', 2_000)}
 JOB_DATA_END`;
 }

@@ -4,11 +4,11 @@ import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendatio
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
-import {applySuggestion, validateSuggestionTarget} from '../ai/suggestions';
+import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
-import {GEMMA_MODEL_BYTES, type GemmaGenerationKind} from '../gemma/protocol';
+import {GEMMA_MODEL_BYTES, GEMMA_STORAGE_HEADROOM_BYTES, type GemmaGenerationKind, type GemmaGenerationPhase} from '../gemma/protocol';
 import {useGemma} from '../gemma/useGemma';
 import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
@@ -65,6 +65,7 @@ export function App() {
         const fit = parseFitAnalysisResult(raw);
         const request = analysisRequestRef.current;
         if (!request) throw new Error('The analysis request is no longer available.');
+        assertFitEvidenceExists(request.cv, fit);
         fitAnalysisRef.current = fit;
         setAnalysis({...fit, suggestions: []});
         setHandledSuggestions({});
@@ -78,6 +79,9 @@ export function App() {
         const fit = fitAnalysisRef.current;
         if (!fit) throw new Error('The completed fit analysis is no longer available.');
         const suggestions = parseSuggestionResult(raw);
+        const request = analysisRequestRef.current;
+        if (!request) throw new Error('The analysis request is no longer available.');
+        assertSuggestionsAreGrounded(request.cv, suggestions.suggestions);
         setAnalysis(combineAnalysis(fit, suggestions));
         setHandledSuggestions({});
         setAnalysisError('');
@@ -221,7 +225,9 @@ export function App() {
   const progress = Math.min(100, (gemma.progress.received / Math.max(gemma.progress.total, 1)) * 100);
   const cvHasContent = hasCvContent(document);
   const elapsedLabel = formatElapsed(generationElapsedSeconds);
-  const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? `Analyzing job fit · ${elapsedLabel}` : activeStage === 'suggestions' && gemma.status === 'generating' ? `Preparing grounded edit · ${elapsedLabel}` : 'Analyze locally';
+  const generationPhaseLabel = labelGenerationPhase(gemma.generationPhase);
+  const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? `Analyzing job fit · ${generationPhaseLabel} · ${elapsedLabel}` : activeStage === 'suggestions' && gemma.status === 'generating' ? `Preparing grounded edit · ${generationPhaseLabel} · ${elapsedLabel}` : 'Analyze locally';
+  const hasInsufficientStorage = !gemma.cached && gemma.capability.storageAvailable !== null && gemma.capability.storageAvailable < GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES;
 
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
@@ -256,7 +262,7 @@ export function App() {
         {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
           <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
-          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
+          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
           <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
@@ -264,11 +270,13 @@ export function App() {
 
           <section className="border border-white/10 bg-white/[.02] p-4">
             <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Gemma 4 E2B</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">{gemma.status.replace('-', ' ')}</p></div><span className={`mt-1 h-2 w-2 rounded-full ${gemma.status === 'ready' ? 'bg-emerald-400' : gemma.status === 'error' ? 'bg-red-400' : 'bg-neutral-700'}`} /></div>
-            <div className="mt-4 space-y-2 border-y border-white/10 py-3 font-mono text-[9px] text-neutral-500"><div className="flex justify-between"><span>DOWNLOAD</span><span>{formatBytes(GEMMA_MODEL_BYTES)}</span></div><div className="flex justify-between"><span>WEBGPU</span><span>{gemma.capability.webGpu ? 'AVAILABLE' : 'UNAVAILABLE'}</span></div><div className="flex justify-between"><span>LOCAL CACHE</span><span>{gemma.cached ? 'SAVED' : 'EMPTY'}</span></div></div>
+            <div className="mt-4 space-y-2 border-y border-white/10 py-3 font-mono text-[9px] text-neutral-500"><div className="flex justify-between"><span>DOWNLOAD</span><span>{formatBytes(GEMMA_MODEL_BYTES)}</span></div><div className="flex justify-between"><span>WEBGPU</span><span>{gemma.capability.webGpu ? 'AVAILABLE' : 'UNAVAILABLE'}</span></div><div className="flex justify-between"><span>LOCAL CACHE</span><span>{gemma.cacheVerified ? 'VERIFIED' : gemma.cached ? 'SAVED' : 'EMPTY'}</span></div><div className="flex justify-between"><span>FREE STORAGE</span><span>{gemma.capability.storageAvailable === null ? 'CHECKING' : formatBytes(gemma.capability.storageAvailable)}</span></div></div>
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div>{gemma.status === 'initializing' && <p className="mt-3 text-[10px] leading-4 text-neutral-600">This can take up to 3 minutes. LiteRT may report an unavailable NPU while continuing normally with WebGPU.</p>}<button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
             {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
+            {hasInsufficientStorage && <p className="mt-3 text-xs leading-5 text-amber-300">Free at least {formatBytes(GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES)} in browser storage before downloading the local model.</p>}
             {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
+            {gemma.status === 'generating' && <div className="mt-3 flex items-center justify-between border border-white/10 bg-black p-3 font-mono text-[9px] uppercase tracking-wider text-neutral-500"><span>{generationPhaseLabel}</span><span>{gemma.generatedCharacters} chars local</span></div>}
+            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400 disabled:opacity-30" disabled={['downloading', 'initializing', 'generating'].includes(gemma.status)} onClick={gemma.clearCache}>Remove cached model</button>}</div>
           </section>
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
@@ -289,6 +297,14 @@ function AnalysisPanel({analysis, document, handled, generatingSuggestions, gene
 
 function formatElapsed(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function labelGenerationPhase(phase: GemmaGenerationPhase | null): string {
+  if (phase === 'queued') return 'Waiting for runtime';
+  if (phase === 'creating-conversation') return 'Preparing session';
+  if (phase === 'conversation-ready') return 'Reading prompt';
+  if (phase === 'decoding') return 'Generating locally';
+  return 'Starting';
 }
 
 function StatusPill({icon, label, tone}: {icon: React.ReactNode; label: string; tone: 'neutral' | 'error'}) {

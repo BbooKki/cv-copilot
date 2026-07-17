@@ -76,7 +76,7 @@ export type AiAnalysisResult = {
   suggestions: Array<{
     id: string;
     target: {
-      section: "summary" | "experience" | "education" | "projects" | "skills";
+      section: "summary" | "experience" | "education" | "projects";
       itemId?: string;
       highlightId?: string;
       field: string;
@@ -97,6 +97,8 @@ export type AiAnalysisResult = {
 - Never convert an unstated implication into a claimed fact.
 - Preserve dates, organizations, qualifications, and numerical metrics exactly unless fixing formatting.
 - A suggestion must cite the CV item IDs that support it.
+- Suggestions may rewrite only summary text, existing experience or education highlight text, and existing project descriptions or highlight text. Employer, role, date, institution, qualification, skill, ID, and array fields are never AI-editable.
+- Reject a proposal that introduces a numerical token not already present somewhere in the CV document.
 - If the job requires a missing skill, report a gap; do not add the skill.
 - Prefer clearer verbs, concise phrasing, relevant ordering, and evidence-backed emphasis.
 - Return no more than the requested suggestion count.
@@ -143,7 +145,11 @@ The runtime uses an 8,192-token context. Input and output still remain explicitl
 - Analyze sections independently if the combined request is too large.
 - Keep the system prompt concise and cap generated suggestions.
 - Keep analysis input within an explicit character budget: compact CV facts without contact or presentation metadata, plus at most 2,500 job-description characters.
-- Normal analysis generations have a 1,900-token hard output ceiling. Fit requests are capped at two matches, two gaps, and one warning; edit requests are capped at one concise suggestion.
-- Repair generations use a 900-token ceiling and materially smaller schemas: one match, one gap, one warning, or one suggestion.
+- Normal analysis generations have a 900-token hard output ceiling. Fit requests are capped at two matches, two gaps, and one warning; edit requests are capped at one concise suggestion.
+- Repair generations use a 520-token ceiling and materially smaller schemas: one match, one gap, one warning, or one suggestion.
 - Cap every generated string, including original and proposed CV text. If a response is malformed, retain a local raw-output preview and retry only the failed stage.
 - Start each generation with a 90-second watchdog and show elapsed stage time in the UI so slow WebGPU work is visible and recoverable.
+- Give every generation a monotonically increasing request ID. Worker chunks, phases, completion, cancellation, and errors must carry that ID; the UI ignores events that do not match the active request.
+- Serialize generation in the worker so a retry cannot overlap a cancelled request while LiteRT unwinds its stream.
+- Allow suggestions only for summary text, existing experience or education highlight text, and existing project descriptions or highlight text. Require at least one evidence ID and verify every cited ID against the request CV before the result enters review state.
+- Put untrusted job content in a bounded JSON envelope and neutralize application boundary-marker strings before prompting.

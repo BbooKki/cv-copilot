@@ -39,6 +39,10 @@ The application works locally without an account. CV content is processed by the
 
 Useful checks are `npm run typecheck`, `npm test`, and `npm run build`. The Gemma artifact is about 2.01 GB and downloads only after explicit user action in a WebGPU-capable browser. It is cached locally and is never bundled with the deployment.
 
+For local Gemma verification, use `npm run build` followed by `npm run preview`, then test in a WebGPU-enabled Chrome or Edge browser. The production build emits the classic worker required by LiteRT's WASM loader; ordinary UI development can still use `npm run dev`. Test the final deployed HTTPS origin separately before presenting.
+
+LiteRT may log an unavailable NPU, `No Winograd`, or mel-filterbank warnings while successfully registering WebGPU. Treat the UI's runtime phase and error message as the source of truth. If structured output fails, expand **Show raw model output**; generation request IDs prevent an older cancelled response from contaminating its retry.
+
 ## Cloud schema
 
 The committed migration in `supabase/migrations/` creates resumes, job targets, and AI analyses with explicit authenticated grants, row-level security, owner-only policies, and same-user foreign-key integrity. The app remains fully usable when cloud configuration is absent.
