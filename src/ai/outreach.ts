@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import type {CvDocument} from '../cv/schema';
-import {buildCompactCvFacts, buildUntrustedPromptEnvelope, ANALYSIS_JOB_CHAR_LIMIT} from './protocol';
+import {buildCompactCvFacts, buildUntrustedPromptEnvelope, ANALYSIS_JOB_CHAR_LIMIT} from './protocol.js';
 
 const emailSchema = z.object({
   subject: z.string().min(1).max(160),

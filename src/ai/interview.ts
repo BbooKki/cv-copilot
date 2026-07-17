@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {CvDocument} from '../cv/schema';
-import {buildCompactCvFacts, buildUntrustedPromptEnvelope, ANALYSIS_JOB_CHAR_LIMIT} from './protocol';
-import {collectEvidenceIds, hasOnlyKnownNumbers} from './suggestions';
+import {buildCompactCvFacts, buildUntrustedPromptEnvelope, ANALYSIS_JOB_CHAR_LIMIT} from './protocol.js';
+import {collectEvidenceIds, hasOnlyKnownNumbers} from './suggestions.js';
 
 export const interviewKitSchema = z.object({
   protocolVersion: z.literal(1),
