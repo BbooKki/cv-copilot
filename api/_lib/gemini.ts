@@ -62,12 +62,16 @@ export async function generateGrounded(prompt: string, options: GenerateOptions 
 }
 
 function buildBody(prompt: string, options: GenerateOptions, grounded: boolean): Record<string, unknown> {
+  // Gemini 3 models "think" by default, which is slow and consumes the output
+  // budget. Low thinking keeps structured extraction fast without hurting it.
+  const thinking = GEMINI_MODEL.startsWith('gemini-3') ? {thinkingConfig: {thinkingLevel: 'low'}} : {};
   return {
     contents: [{role: 'user', parts: [{text: prompt}]}],
     ...(grounded ? {tools: [{google_search: {}}]} : {}),
     generationConfig: {
       temperature: options.temperature ?? 0.2,
       maxOutputTokens: options.maxOutputTokens ?? 2_048,
+      ...thinking,
       ...(options.json && !grounded ? {responseMimeType: 'application/json'} : {}),
     },
   };

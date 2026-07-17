@@ -12,6 +12,7 @@ import {buildInterviewKit} from '../ai/interviewClient';
 import {assertInterviewKitGrounded, type InterviewKit} from '../ai/interview';
 import {buildOutreachKit} from '../ai/outreachClient';
 import type {OutreachKit} from '../ai/outreach';
+import {SAMPLE_ANALYSIS} from '../ai/sampleAnalysis';
 import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
@@ -44,6 +45,7 @@ export function App() {
   });
   const [showConsent, setShowConsent] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [analysisNotice, setAnalysisNotice] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
   const [companyBrief, setCompanyBrief] = useState<GroundedCompanyBrief | null>(null);
@@ -228,6 +230,7 @@ export function App() {
     setAnalysis(null);
     setHandledSuggestions({});
     setAnalysisError('');
+    setAnalysisNotice('');
     setInvalidAnalysisOutput(null);
     setCloudBusy(true);
     try {
@@ -236,8 +239,11 @@ export function App() {
       assertSuggestionsAreGrounded(document, result.suggestions);
       setAnalysis(result);
     } catch (cause) {
-      const message = cause instanceof AiProviderError || cause instanceof Error ? cause.message : 'Cloud analysis failed.';
-      setAnalysisError(message);
+      // Never dead-end the demo: if the live AI is unavailable, show a clearly
+      // labelled sample so the walkthrough completes, and invite a retry.
+      const message = cause instanceof Error ? cause.message : 'Cloud analysis failed.';
+      setAnalysis(SAMPLE_ANALYSIS);
+      setAnalysisNotice(`${message} Showing a sample result — click Analyze again in a moment for your real, CV-grounded analysis.`);
     } finally {
       setCloudBusy(false);
     }
@@ -443,6 +449,7 @@ export function App() {
           </section>}
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
+          {analysisNotice && <p className="border border-amber-400/20 bg-amber-400/5 p-3 text-xs leading-5 text-amber-200">{analysisNotice}</p>}
           {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
           {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
           {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">

@@ -195,4 +195,18 @@ describe('cloud analysis (default)', () => {
     expect(await screen.findByText('Cloud analysis confirms strong front-end alignment.')).toBeInTheDocument();
     expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
   });
+
+  it('shows a labelled sample and a notice when the live AI is unavailable', async () => {
+    cloudHarness.analyze.mockRejectedValue(new Error('The AI service is busy. Please try again in a moment.'));
+
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: /Analyze with Gemini/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+
+    expect(await screen.findByText(/Sample result:/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing a sample result/)).toBeInTheDocument();
+  });
 });
