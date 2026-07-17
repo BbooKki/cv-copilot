@@ -14,6 +14,7 @@ import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
+import {readField, writeField, fieldLabel, type CvFieldTarget} from '../editor/fieldTargets';
 import {GEMMA_MODEL_BYTES, GEMMA_STORAGE_HEADROOM_BYTES, type GemmaGenerationKind, type GemmaGenerationPhase} from '../gemma/protocol';
 import {useGemma} from '../gemma/useGemma';
 import {extractJob} from '../jobs/client';
@@ -48,6 +49,8 @@ export function App() {
   const [interviewKit, setInterviewKit] = useState<InterviewKit | null>(null);
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [interviewError, setInterviewError] = useState('');
+  const [editingTarget, setEditingTarget] = useState<CvFieldTarget | null>(null);
+  const [editingValue, setEditingValue] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
@@ -180,6 +183,25 @@ export function App() {
     if (!previous) return;
     setDocument(previous);
     setUndoStack(stack => stack.slice(0, -1));
+  };
+
+  const openFieldEditor = useCallback((target: CvFieldTarget) => {
+    setEditingTarget(target);
+    setEditingValue(readField(document, target) ?? '');
+  }, [document]);
+
+  const closeFieldEditor = () => setEditingTarget(null);
+
+  const saveFieldEditor = () => {
+    if (!editingTarget) return;
+    try { updateDocument(writeField(document, editingTarget, editingValue)); }
+    catch { /* the field was removed while editing */ }
+    setEditingTarget(null);
+  };
+
+  const handleEditorKey = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') { event.preventDefault(); closeFieldEditor(); }
+    else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); saveFieldEditor(); }
   };
 
   const handleExtract = async () => {
@@ -346,8 +368,8 @@ export function App() {
 
     <div className="print-root mx-auto grid max-w-[1800px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,40%)]">
       <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:overflow-y-auto lg:px-6 ${view !== 'cv' ? 'hidden lg:block' : ''}`} aria-label="CV preview workspace">
-        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{document.settings.templateId === 'modern' ? 'Modern Mono' : 'Classic ATS'} · {document.settings.density}</p></div>
-        <div className="paper-frame">{cvHasContent ? <CvPreview document={document} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
+        <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports. Click any text field to edit it.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{document.settings.templateId === 'modern' ? 'Modern Mono' : 'Classic ATS'} · {document.settings.density}</p></div>
+        <div className="paper-frame">{cvHasContent ? <CvPreview document={document} onEditField={openFieldEditor} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
       </section>
 
       <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black lg:h-[calc(100vh-65px)] lg:overflow-y-auto ${view !== 'copilot' ? 'hidden lg:block' : ''}`} aria-label="CV Copilot">
@@ -427,6 +449,14 @@ export function App() {
     </div>
 
     <div className="no-print fixed bottom-4 right-4 flex gap-2 md:hidden"><button aria-label="Export PDF" disabled={!cvHasContent} className="focus-ring grid h-12 w-12 place-items-center bg-white text-black shadow-2xl disabled:opacity-30" onClick={() => window.print()}><Download size={18} /></button></div>
+
+    {editingTarget && <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Edit ${fieldLabel(editingTarget)}`} onClick={closeFieldEditor}>
+      <div className="w-full max-w-lg border border-white/15 bg-neutral-950 p-4" onClick={event => event.stopPropagation()}>
+        <div className="flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">Edit · {fieldLabel(editingTarget)}</p><button className="focus-ring p-1 text-neutral-500 hover:text-white" aria-label="Close editor" onClick={closeFieldEditor}><X size={16} /></button></div>
+        <textarea autoFocus aria-label={fieldLabel(editingTarget)} rows={5} className="focus-ring mt-3 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-white outline-none focus:border-white/40" value={editingValue} onChange={event => setEditingValue(event.target.value)} onKeyDown={handleEditorKey} />
+        <div className="mt-3 flex items-center justify-between gap-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">⌘/Ctrl+Enter save · Esc cancel</p><div className="flex gap-2"><button className="focus-ring border border-white/15 px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={closeFieldEditor}>Cancel</button><button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black" onClick={saveFieldEditor}>Save</button></div></div>
+      </div>
+    </div>}
   </main>;
 }
 

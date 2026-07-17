@@ -1,9 +1,11 @@
 import {memo} from 'react';
 import type {CvDocument} from '../cv/schema';
+import type {CvFieldTarget} from '../editor/fieldTargets';
+import {Editable} from './Editable';
 
-type TemplateProps = {document: CvDocument};
+type TemplateProps = {document: CvDocument; onEditField?: (target: CvFieldTarget) => void};
 
-export const ModernTemplate = memo(function ModernTemplate({document}: TemplateProps) {
+export const ModernTemplate = memo(function ModernTemplate({document, onEditField}: TemplateProps) {
   const accent = document.settings.accentColor;
   const compact = document.settings.density === 'compact';
   const experience = document.experience.filter(item => item.company || item.role || item.startDate || item.highlights.some(highlight => highlight.text));
@@ -26,12 +28,12 @@ export const ModernTemplate = memo(function ModernTemplate({document}: TemplateP
           {languages.length > 0 && <ModernSection title="Languages">{languages.map(item => <p key={item.id} className="mb-2"><strong>{item.language}</strong><br /><span className="text-[9pt] text-neutral-600">{item.proficiency}</span></p>)}</ModernSection>}
         </aside>
         <div className={compact ? 'px-[8mm] py-[8mm]' : 'px-[11mm] py-[11mm]'}>
-          {document.summary && <ModernSection title="Profile"><p className="text-neutral-700">{document.summary}</p></ModernSection>}
+          {document.summary && <ModernSection title="Profile"><p className="text-neutral-700"><Editable target={{kind: 'summary'}} onEdit={onEditField}>{document.summary}</Editable></p></ModernSection>}
           {experience.length > 0 && <ModernSection title="Experience">{experience.map(item => <div key={item.id} className="mb-5 break-inside-avoid">
             <div className="flex items-start justify-between gap-4"><div><h3 className="text-[11pt] font-bold text-neutral-950">{item.role}</h3><p className="font-semibold text-neutral-600">{item.company}</p></div><p className="shrink-0 text-right text-[8.5pt] uppercase tracking-wide text-neutral-500">{item.startDate}<br />{item.current ? 'Present' : item.endDate}</p></div>
-            {item.highlights.some(highlight => highlight.text) && <ul className="mt-2 list-disc space-y-1 pl-4 text-neutral-700">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
+            {item.highlights.some(highlight => highlight.text) && <ul className="mt-2 list-disc space-y-1 pl-4 text-neutral-700">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}><Editable target={{kind: 'experience-highlight', itemId: item.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}
           </div>)}</ModernSection>}
-          {projects.length > 0 && <ModernSection title="Selected Projects">{projects.map(project => <div key={project.id} className="mb-4 break-inside-avoid"><h3 className="font-bold text-neutral-950">{project.name}</h3><p className="text-[8.5pt] uppercase tracking-wide text-neutral-500">{project.technologies.join(' · ')}</p>{project.description && <p className="mt-1 text-neutral-700">{project.description}</p>}</div>)}</ModernSection>}
+          {projects.length > 0 && <ModernSection title="Selected Projects">{projects.map(project => <div key={project.id} className="mb-4 break-inside-avoid"><h3 className="font-bold text-neutral-950">{project.name}</h3><p className="text-[8.5pt] uppercase tracking-wide text-neutral-500">{project.technologies.join(' · ')}</p>{project.description && <p className="mt-1 text-neutral-700"><Editable target={{kind: 'project-description', itemId: project.id}} onEdit={onEditField}>{project.description}</Editable></p>}</div>)}</ModernSection>}
         </div>
       </div>
     </article>

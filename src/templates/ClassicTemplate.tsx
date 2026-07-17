@@ -1,13 +1,15 @@
 import {memo} from 'react';
 import type {CvDocument} from '../cv/schema';
+import type {CvFieldTarget} from '../editor/fieldTargets';
+import {Editable} from './Editable';
 
-type TemplateProps = {document: CvDocument};
+type TemplateProps = {document: CvDocument; onEditField?: (target: CvFieldTarget) => void};
 
 function dates(start?: string, end?: string, current?: boolean): string {
   return [start, current ? 'Present' : end].filter(Boolean).join(' — ');
 }
 
-export const ClassicTemplate = memo(function ClassicTemplate({document}: TemplateProps) {
+export const ClassicTemplate = memo(function ClassicTemplate({document, onEditField}: TemplateProps) {
   const compact = document.settings.density === 'compact';
   const experience = document.experience.filter(item => item.company || item.role || item.startDate || item.highlights.some(highlight => highlight.text));
   const education = document.education.filter(item => item.institution || item.qualification || item.field);
@@ -24,19 +26,19 @@ export const ClassicTemplate = memo(function ClassicTemplate({document}: Templat
         </p>
       </header>
       <div className={compact ? 'space-y-3 pt-3' : 'space-y-5 pt-5'}>
-        {document.summary && <Section title="Profile"><p>{document.summary}</p></Section>}
+        {document.summary && <Section title="Profile"><p><Editable target={{kind: 'summary'}} onEdit={onEditField}>{document.summary}</Editable></p></Section>}
         {experience.length > 0 && <Section title="Experience">
           <div className="space-y-4">{experience.map(item => <div key={item.id} className="break-inside-avoid">
             <div className="flex items-baseline justify-between gap-4"><h3 className="font-bold">{item.role} · {item.company}</h3><span className="shrink-0 text-[9pt] text-neutral-500">{dates(item.startDate, item.endDate, item.current)}</span></div>
             {item.location && <p className="text-[9pt] text-neutral-500">{item.location}</p>}
-            {item.highlights.some(highlight => highlight.text) && <ul className="mt-1 list-disc space-y-1 pl-4">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
+            {item.highlights.some(highlight => highlight.text) && <ul className="mt-1 list-disc space-y-1 pl-4">{item.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}><Editable target={{kind: 'experience-highlight', itemId: item.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}
           </div>)}</div>
         </Section>}
         {projects.length > 0 && <Section title="Projects">
           <div className="space-y-3">{projects.map(project => <div key={project.id} className="break-inside-avoid">
             <h3 className="font-bold">{project.name} <span className="font-normal text-neutral-500">{project.technologies.join(' · ')}</span></h3>
-            {project.description && <p>{project.description}</p>}
-            {project.highlights.some(highlight => highlight.text) && <ul className="list-disc pl-4">{project.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}>{highlight.text}</li>)}</ul>}
+            {project.description && <p><Editable target={{kind: 'project-description', itemId: project.id}} onEdit={onEditField}>{project.description}</Editable></p>}
+            {project.highlights.some(highlight => highlight.text) && <ul className="list-disc pl-4">{project.highlights.filter(highlight => highlight.text).map(highlight => <li key={highlight.id}><Editable target={{kind: 'project-highlight', itemId: project.id, highlightId: highlight.id}} onEdit={onEditField}>{highlight.text}</Editable></li>)}</ul>}
           </div>)}</div>
         </Section>}
         <div className="grid grid-cols-2 gap-8">
