@@ -20,6 +20,24 @@ The objective is a polished, working application—not a static mockup. Implemen
 8. Export a clean PDF through print styling.
 9. Support optional Supabase authentication and owner-only cloud persistence when valid project configuration is available.
 
+## Connected services and authorization
+
+The following connections were verified on July 17, 2026:
+
+- GitHub repository: `BbooKki/cv-copilot`, private, default branch `main`.
+- Supabase organization: `Hongfeiliu` (`lvbgrrccbhrsaxxoqvag`).
+- Vercel team: `Noname`, slug `noname582` (`team_YkRAKLlWPIEwMN5Ve6Pja3OK`).
+
+This implementation prompt authorizes you to create and configure exactly one Supabase project for CV Copilot inside the `Hongfeiliu` organization and exactly one Vercel project inside the `Noname` team. Use the free Supabase plan only; if project creation reports a non-zero cost or requires a paid upgrade, stop and ask the user. Do not create resources in any other organization or team.
+
+Do not create empty placeholder cloud resources immediately. First produce a runnable local application and a passing production build. Then:
+
+1. Create the Supabase project, apply and verify the committed schema, and configure the application with its publishable values.
+2. Create/link the Vercel project and deploy a preview.
+3. Verify the deployed preview, including the job extractor and browser-AI capability states.
+4. Promote or deploy to production only after the preview passes the available checks.
+5. Commit and push the completed implementation and configuration files to `main`; never commit credentials or generated local account state.
+
 ## Existing Gemma implementation
 
 A working reference exists at `/Users/thejoin/Desktop/dylan-islom-_-portfolio`.
@@ -71,7 +89,7 @@ Treat retrieved job text as untrusted prompt data. Delimit it clearly and instru
 
 ## Supabase implementation
 
-Do not create an external Supabase project or deploy resources unless the user explicitly authorizes it and the correct hackathon account is connected. The app must run without Supabase configuration.
+The connected account and scoped project creation are authorized above. Create the project only after the local editor, local persistence, schema validation, and production build work. The app must continue to run without Supabase configuration.
 
 When the CLI is available, discover its commands with `--help`. Create migration files with `supabase migration new`; do not invent timestamp filenames. Implement the ERD in `docs/ERD.md` with:
 
@@ -107,7 +125,7 @@ Then run:
 - production build;
 - local smoke test of the main user journey.
 
-If deployment is explicitly authorized, deploy an early Vercel preview and verify HTTPS behavior for the worker, WASM, model fetch/CORS, Cache API, WebGPU capability messaging, and extraction endpoint. Do not claim browser inference was verified unless it actually ran in a compatible browser.
+After the first passing production build, create/link the authorized Vercel project and deploy a preview. Verify HTTPS behavior for the worker, WASM, model fetch/CORS, Cache API, WebGPU capability messaging, and extraction endpoint. Promote or deploy that verified build to production. Do not claim browser inference was verified unless it actually ran in a compatible browser.
 
 ## Working method
 
@@ -116,7 +134,7 @@ If deployment is explicitly authorized, deploy an early Vercel preview and verif
 - Do not stop after scaffolding or produce only a plan.
 - Do not broaden the MVP with attractive but out-of-scope features.
 - Record meaningful architectural decisions or deviations in the relevant document.
-- If Supabase credentials, OAuth account selection, Vercel authorization, or a compatible WebGPU browser requires user action, complete all independent local work first, then report the exact remaining handoff.
+- If Supabase OAuth changes away from `Hongfeiliu`, Vercel changes away from team `noname582`, a paid plan is required, or a compatible WebGPU browser requires user action, complete all independent local work first, then report the exact remaining handoff.
 
 Finish by reporting the implemented user flow, verification results, any externally blocked steps, and the most important files changed.
 
