@@ -1,5 +1,6 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {parseHTML} from 'linkedom';
+import {adaptJobPageUrl} from './_lib/jobSiteAdapters.js';
 import {assertPublicDestination, MAX_REDIRECTS, parsePublicHttpUrl} from './_lib/urlSafety.js';
 
 const MAX_BYTES = Number(process.env.JOB_FETCH_MAX_BYTES ?? 1_500_000);
@@ -22,13 +23,15 @@ export default async function handler(request: IncomingMessage, response: Server
 }
 
 async function fetchReadable(value: string): Promise<{url: string; title: string; company?: string; text: string}> {
-  let url = parsePublicHttpUrl(value);
+  const sourceUrl = parsePublicHttpUrl(value);
+  let url = adaptJobPageUrl(sourceUrl);
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     await assertPublicDestination(url);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let fetched: Response;
     try { fetched = await fetch(url, {redirect: 'manual', signal: controller.signal, headers: {'user-agent': 'CV-Copilot-Job-Extractor/1.0', accept: 'text/html,text/plain'}}); }
+    catch (cause) { if (controller.signal.aborted) throw new Error('The job site did not respond in time.'); throw cause; }
     finally { clearTimeout(timeout); }
     if ([301, 302, 303, 307, 308].includes(fetched.status)) {
       const location = fetched.headers.get('location');
@@ -40,22 +43,22 @@ async function fetchReadable(value: string): Promise<{url: string; title: string
     const contentType = fetched.headers.get('content-type')?.toLowerCase() ?? '';
     if (!contentType.includes('text/html') && !contentType.includes('text/plain')) throw new Error('The URL did not return a readable text page.');
     const html = await readResponse(fetched.body, MAX_BYTES);
-    if (contentType.includes('text/plain')) return {url: url.toString(), title: 'Job description', text: normalizeText(html)};
-    return extractHtml(url, html);
+    if (contentType.includes('text/plain')) return {url: sourceUrl.toString(), title: 'Job description', text: normalizeText(html)};
+    return {...extractHtml(html), url: sourceUrl.toString()};
   }
   throw new Error('Unable to follow this URL.');
 }
 
-function extractHtml(url: URL, html: string): {url: string; title: string; company?: string; text: string} {
+function extractHtml(html: string): {title: string; company?: string; text: string} {
   const {document} = parseHTML(html);
   document.querySelectorAll('script,style,noscript,svg,canvas,form,nav,footer,header,[hidden],[aria-hidden="true"]')?.forEach(node => node.remove());
   document.querySelectorAll('[style]')?.forEach(node => { const style = node.getAttribute('style')?.toLowerCase() ?? ''; if (style.includes('display:none') || style.includes('visibility:hidden')) node.remove(); });
-  const title = normalizeText(document.querySelector('h1')?.textContent ?? document.querySelector('title')?.textContent ?? 'Job description').slice(0, 200);
+  const title = normalizeText(document.querySelector('h1')?.textContent ?? document.querySelector('.user_content strong')?.textContent ?? document.querySelector('title')?.textContent ?? 'Job description').slice(0, 200);
   const company = normalizeText(document.querySelector('[data-company], .company, [class*="company"]')?.textContent ?? '').slice(0, 120) || undefined;
   const main = document.querySelector('main, article, [role="main"], .job-description, [class*="description"]') ?? document.body;
   const text = normalizeText(main?.textContent ?? '').slice(0, 30_000);
   if (text.length < 80) throw new Error('The page did not contain enough readable job text. Paste the description instead.');
-  return {url: url.toString(), title, company, text};
+  return {title, company, text};
 }
 
 function normalizeText(value: string): string { return value.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*\n+/g, '\n\n').trim(); }
