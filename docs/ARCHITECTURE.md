@@ -24,6 +24,8 @@ The browser owns the canonical CV state, template rendering, local persistence, 
 
 The worker owns model download, integrity-size checks, cache access, engine initialization, conversation lifecycle, streaming, cancellation, and structured generation. Worker messages use a typed protocol. The UI never accesses the inference engine directly.
 
+Vite serves the worker as an ES module in development, but production must bundle and launch it as a classic worker because LiteRT's Emscripten WASM loader uses `importScripts()`. Do not force Vite's worker output format to `es`.
+
 ### Job extraction function
 
 The function accepts one public HTTP(S) URL and returns normalized, size-limited job text plus basic metadata. It is not a general proxy. It must validate DNS/IP destinations before requests and redirects, allow only appropriate textual content, enforce timeout/size limits, and sanitize the document.

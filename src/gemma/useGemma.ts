@@ -21,7 +21,10 @@ export function useGemma(onComplete: (raw: string) => void) {
       setCapability(next);
       if (!next.webGpu || !next.secureContext) setStatus('unsupported');
     });
-    const worker = new Worker(new URL('./gemma.worker.ts', import.meta.url), {type: 'module'});
+    // Vite serves the source worker as an ES module during development. The
+    // bundled LiteRT WASM loader calls importScripts(), so production must use
+    // the classic worker bundle produced by Vite.
+    const worker = new Worker(new URL('./gemma.worker.ts', import.meta.url), {type: import.meta.env.DEV ? 'module' : 'classic'});
     workerRef.current = worker;
     worker.onmessage = (event: MessageEvent<GemmaToMainMessage>) => {
       if (!active) return;
