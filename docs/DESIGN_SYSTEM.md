@@ -2,7 +2,7 @@
 
 ## Direction
 
-CV Copilot uses a precise monochrome interface inspired by the existing Dylan Islom portfolio: black canvas, translucent white surfaces, thin white borders, high-contrast typography, compact monospace metadata, and restrained motion.
+CV Copilot uses a precise monochrome interface: black canvas, translucent white surfaces, thin white borders, high-contrast typography, compact monospace metadata, and restrained motion.
 
 The application shell is dark. CV previews and exported documents remain paper-white by default for readability, printing, and professional use. Do not turn the CV itself into a dark cyberpunk poster.
 
@@ -135,7 +135,7 @@ Suggested hierarchy:
 - Do not render fake personal data on the paper preview. When the document is empty, show a restrained workspace empty state without pretending it is CV content.
 - Field labels remain visible. Use placeholders only for necessary format guidance such as a URL or date shape; never use them as substitute user data.
 - New repeatable entries begin empty and receive neutral interface titles such as `New experience` until the user enters content.
-- Keep deterministic sample content behind an explicit `Load example` or demo action.
+- Keep test fixtures out of the production interface.
 
 ## Motion
 
@@ -154,4 +154,4 @@ Suggested hierarchy:
 
 ## Reference boundaries
 
-Reuse the portfolio's palette, typography roles, fine borders, inverse buttons, compact metadata, and local-AI presentation. Do not copy its personal branding, `DYLAN_ISLOM` labels, contact content, portfolio navigation, or full-screen cyberpunk effects.
+Keep the established palette, typography roles, fine borders, inverse buttons, compact metadata, and local-AI presentation. Do not introduce personal branding, contact content, portfolio navigation, or full-screen cyberpunk effects.

@@ -37,7 +37,7 @@ These instructions apply to the entire repository. Read the documents in `docs/`
 - Show the download size and progress before and during download.
 - Cache the verified model locally and provide a way to clear it.
 - Keep CV text in the browser unless the user explicitly chooses cloud saving.
-- Reuse the proven implementation from `/Users/thejoin/Desktop/dylan-islom-_-portfolio` by copying and adapting the relevant files. Never modify that portfolio as part of this project.
+- Keep the proven LiteRT-LM worker implementation self-contained in this repository; do not depend on or modify another local project.
 - The known model artifact is `gemma-4-E2B-it-web.litertlm`, verified at `2_008_432_640` bytes. Keep the URL and size centralized.
 
 ## URL retrieval

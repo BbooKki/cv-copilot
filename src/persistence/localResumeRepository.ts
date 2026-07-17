@@ -1,6 +1,7 @@
 import {cvDocumentSchema, type CvDocument} from '../cv/schema';
 
-const STORAGE_KEY = 'cv-copilot-document-v1';
+const STORAGE_KEY = 'cv-copilot-document-v2';
+const LEGACY_STORAGE_KEY = 'cv-copilot-document-v1';
 
 export interface ResumeRepository {
   load(): Promise<CvDocument | null>;
@@ -12,6 +13,7 @@ export class LocalResumeRepository implements ResumeRepository {
   constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = localStorage) {}
 
   async load(): Promise<CvDocument | null> {
+    this.storage.removeItem(LEGACY_STORAGE_KEY);
     const raw = this.storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = cvDocumentSchema.safeParse(JSON.parse(raw) as unknown);

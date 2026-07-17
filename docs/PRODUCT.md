@@ -22,7 +22,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 
 ## Primary journey
 
-1. Start with a blank CV or a locally saved draft; example content is loaded only after an explicit demo action.
+1. Start with a blank CV or a locally saved draft.
 2. Build the CV from the Copilot pane using precise field controls, with a live paper preview beside it.
 3. Paste a job URL or job-description text in the Copilot pane.
 4. Activate and load the local Gemma model.
@@ -39,7 +39,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - Selecting an editing section exposes its exact fields; users do not need to express precise facts such as dates or contact details conversationally.
 - AI changes always remain explicit accept/reject actions with original and proposed text.
 - Mobile switches between `CV` and `Copilot` views instead of compressing both panes.
-- A new user never sees another person's CV as their own document. Demo fixtures remain available only through an explicit `Load example` action.
+- A new user never sees another person's CV as their own document. Test fixtures are never available in the production interface.
 
 ## MVP acceptance criteria
 

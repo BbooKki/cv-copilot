@@ -1,9 +1,8 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Sparkles, Square, WandSparkles, X} from 'lucide-react';
-import {aiAnalysisResultSchema, buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
-import {applySuggestion, createDemoAnalysis, validateSuggestionTarget} from '../ai/suggestions';
+import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Square, WandSparkles, X} from 'lucide-react';
+import {buildAnalysisPrompt, parseAiResult, type AiAnalysisResult, type AiAnalysisRequest} from '../ai/protocol';
+import {applySuggestion, validateSuggestionTarget} from '../ai/suggestions';
 import {type CvDocument} from '../cv/schema';
-import {sampleCv, sampleJobText} from '../cv/sample';
 import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
 import {GEMMA_MODEL_BYTES} from '../gemma/protocol';
@@ -89,16 +88,6 @@ export function App() {
     gemma.generate(buildAnalysisPrompt(request));
   };
 
-  const runDemo = () => { setAnalysis(aiAnalysisResultSchema.parse(createDemoAnalysis(document))); setHandledSuggestions({}); setAnalysisError(''); setCopilotMode('tailor'); setView('copilot'); };
-
-  const loadExample = () => {
-    updateDocument(structuredClone(sampleCv));
-    setJobText(sampleJobText);
-    setJobMeta({});
-    setAnalysis(null);
-    setHandledSuggestions({});
-  };
-
   const accept = (suggestion: AiAnalysisResult['suggestions'][number]) => {
     try { const applied = applySuggestion(document, suggestion); updateDocument(applied.document); setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'})); }
     catch (cause) { setAnalysisError(cause instanceof Error ? cause.message : 'Unable to apply this suggestion.'); }
@@ -138,7 +127,6 @@ export function App() {
 
         {copilotMode === 'edit' ? <div className="p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
-          {!cvHasContent && <button className="focus-ring mb-5 w-full border border-white/10 px-3 py-3 text-xs text-neutral-400 hover:border-white/30 hover:text-white" onClick={loadExample}><Sparkles size={13} className="mr-1.5 inline" />Load example CV</button>}
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
           <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
@@ -149,8 +137,8 @@ export function App() {
             <div className="mt-4 space-y-2 border-y border-white/10 py-3 font-mono text-[9px] text-neutral-500"><div className="flex justify-between"><span>DOWNLOAD</span><span>{formatBytes(GEMMA_MODEL_BYTES)}</span></div><div className="flex justify-between"><span>WEBGPU</span><span>{gemma.capability.webGpu ? 'AVAILABLE' : 'UNAVAILABLE'}</span></div><div className="flex justify-between"><span>LOCAL CACHE</span><span>{gemma.cached ? 'SAVED' : 'EMPTY'}</span></div></div>
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div><button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
             {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
-            {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The editor and deterministic demo remain available.</p>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={runLocalAnalysis}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}<button className="focus-ring text-xs text-neutral-500 hover:text-white disabled:opacity-30" disabled={!cvHasContent} onClick={runDemo}><Sparkles size={13} className="mr-1 inline" />Run instant demo analysis</button>{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
+            {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
+            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || jobText.trim().length < 40 || !cvHasContent} onClick={runLocalAnalysis}><WandSparkles size={14} />Analyze locally</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={gemma.cancel}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400" onClick={gemma.clearCache}>Remove cached model</button>}</div>
           </section>
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}

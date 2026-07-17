@@ -37,25 +37,3 @@ export function applySuggestion(document: CvDocument, suggestion: AiSuggestion):
   next.updatedAt = new Date().toISOString();
   return {document: next, patch: {suggestionId: suggestion.id, previous: suggestion.originalText, next: suggestion.proposedText}};
 }
-
-export function createDemoAnalysis(document: CvDocument): import('./protocol').AiAnalysisResult {
-  const first = document.experience[0]?.highlights[0];
-  return {
-    protocolVersion: 1,
-    fitSummary: 'Your CV shows strong alignment in TypeScript, full-stack delivery, real-time systems, and mobile development. The strongest improvement is to make existing evidence more role-specific and concise.',
-    matchedRequirements: [
-      {requirement: 'TypeScript and Node.js', evidence: 'Backend skills list and NestJS delivery experience.', cvItemId: 'skill-backend'},
-      {requirement: 'Real-time product development', evidence: 'Medical dashboard and Socket.IO streaming experience.', cvItemId: 'hl-dashboard'},
-    ],
-    gaps: [{requirement: 'Formal team-management experience', explanation: 'The CV shows technical leadership but does not state people-management responsibility.', resolvableFromExistingFacts: false}],
-    suggestions: first ? [{
-      id: 'demo-suggestion-1',
-      target: {section: 'experience', itemId: document.experience[0].id, highlightId: first.id, field: 'text'},
-      originalText: first.text,
-      proposedText: first.text.replace('Led development and operation of', 'Led end-to-end delivery and operation of'),
-      reason: 'Clarifies ownership while preserving the existing scope and number of applications.',
-      evidenceIds: [document.experience[0].id, first.id],
-    }] : [],
-    warnings: ['Demo analysis is deterministic and does not replace the local Gemma analysis.'],
-  };
-}

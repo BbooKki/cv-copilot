@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {sampleCv} from '../cv/sample';
+import {testCv} from '../cv/testFixture';
 import {LocalResumeRepository} from './localResumeRepository';
 
 function memoryStorage() {
@@ -10,13 +10,13 @@ function memoryStorage() {
 describe('LocalResumeRepository', () => {
   it('saves and loads a valid CV', async () => {
     const repository = new LocalResumeRepository(memoryStorage());
-    await repository.save(sampleCv);
-    await expect(repository.load()).resolves.toEqual(sampleCv);
+    await repository.save(testCv);
+    await expect(repository.load()).resolves.toEqual(testCv);
   });
 
-  it('discards invalid stored data', async () => {
+  it('discards data from the retired storage version', async () => {
     const storage = memoryStorage();
-    storage.setItem('cv-copilot-document-v1', '{"broken":true}');
+    storage.setItem('cv-copilot-document-v1', JSON.stringify(testCv));
     const repository = new LocalResumeRepository(storage);
     await expect(repository.load()).resolves.toBeNull();
   });

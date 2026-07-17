@@ -24,7 +24,7 @@ The objective is a polished, working application—not a static mockup. Implemen
 
 The following connections were verified on July 17, 2026:
 
-- GitHub repository: `BbooKki/cv-copilot`, private, default branch `main`.
+- GitHub repository: use the existing private `cv-copilot` repository and its default `main` branch.
 - Supabase organization: `Hongfeiliu` (`lvbgrrccbhrsaxxoqvag`).
 - Vercel team: `Noname`, slug `noname582` (`team_YkRAKLlWPIEwMN5Ve6Pja3OK`).
 
@@ -40,7 +40,7 @@ Do not create empty placeholder cloud resources immediately. First produce a run
 
 ## Existing Gemma implementation
 
-A working reference exists at `/Users/thejoin/Desktop/dylan-islom-_-portfolio`.
+A working reference implementation was previously adapted into this repository.
 
 Inspect and reuse the design of:
 
@@ -73,7 +73,7 @@ Centralize these values and make the AI feature removable through `VITE_GEMMA_EN
 
 ## Visual direction
 
-Follow `docs/DESIGN_SYSTEM.md` as a required implementation specification. Adapt the visual language from `/Users/thejoin/Desktop/dylan-islom-_-portfolio/src/index.css` and its Gemma interface without copying personal branding or portfolio content.
+Follow `docs/DESIGN_SYSTEM.md` as a required implementation specification. Keep the established visual language and Gemma interface without adding personal branding or portfolio content.
 
 - Build the application shell with a black canvas, white primary text, neutral-gray hierarchy, translucent white surfaces, and thin white borders.
 - Use `Inter` for body/UI, `Space Grotesk` for display headings, and `JetBrains Mono` for statuses, metrics, and compact labels.

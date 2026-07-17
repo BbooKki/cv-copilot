@@ -1,19 +1,19 @@
 import {describe, expect, it} from 'vitest';
 import {cvDocumentSchema} from './schema';
-import {sampleCv} from './sample';
+import {testCv} from './testFixture';
 
 describe('cvDocumentSchema', () => {
   it('accepts the deterministic sample', () => {
-    expect(cvDocumentSchema.parse(sampleCv)).toEqual(sampleCv);
+    expect(cvDocumentSchema.parse(testCv)).toEqual(testCv);
   });
 
   it('rejects unsafe website protocols', () => {
-    const result = cvDocumentSchema.safeParse({...sampleCv, basics: {...sampleCv.basics, website: 'javascript:alert(1)'}});
+    const result = cvDocumentSchema.safeParse({...testCv, basics: {...testCv.basics, website: 'javascript:alert(1)'}});
     expect(result.success).toBe(false);
   });
 
   it('rejects duplicate collection IDs', () => {
-    const result = cvDocumentSchema.safeParse({...sampleCv, skills: [sampleCv.skills[0], sampleCv.skills[0]]});
+    const result = cvDocumentSchema.safeParse({...testCv, skills: [testCv.skills[0], testCv.skills[0]]});
     expect(result.success).toBe(false);
   });
 });
