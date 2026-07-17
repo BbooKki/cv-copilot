@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, Mail, MessageSquare, Mic, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, Mail, MessageSquare, Mic, PenLine, RotateCcw, Search, Send, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
@@ -30,6 +30,7 @@ import {AccountMenu} from '../persistence/AccountMenu';
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
 type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
+type TailorMessage = {id: string; role: 'user' | 'assistant'; text: string};
 const CLOUD_CONSENT_KEY = 'cvcopilot.cloudConsent.v1';
 
 export function App() {
@@ -65,6 +66,8 @@ export function App() {
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
   const [extracting, setExtracting] = useState(false);
   const [jobError, setJobError] = useState('');
+  const [tailorInput, setTailorInput] = useState('');
+  const [tailorMessages, setTailorMessages] = useState<TailorMessage[]>([]);
   const [analysis, setAnalysis] = useState<AiAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState('');
   const [invalidAnalysisOutput, setInvalidAnalysisOutput] = useState<{stage: 'fit' | 'suggestions'; message: string; raw: string} | null>(null);
@@ -76,6 +79,7 @@ export function App() {
   const saveTimer = useRef<number | null>(null);
   const activeStageRef = useRef<GenerationStage>(null);
   const analysisRequestRef = useRef<AiAnalysisRequest | null>(null);
+  const pendingCloudRequestRef = useRef<{text: string; meta: typeof jobMeta} | null>(null);
   const fitAnalysisRef = useRef<AiFitAnalysisResult | null>(null);
   const generateRef = useRef<(prompt: string, kind?: GemmaGenerationKind) => void>(() => undefined);
 
@@ -235,21 +239,26 @@ export function App() {
     else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); saveFieldEditor(); }
   };
 
-  const handleExtract = async () => {
+  const handleExtract = async (inputUrl = jobUrl, analyzeAfter = false) => {
     setExtracting(true); setJobError('');
     try {
-      const result = await extractJob(jobUrl);
+      const result = await extractJob(inputUrl);
       clearJobDerivedResults();
+      setJobUrl(inputUrl);
       setJobText(result.text); setJobMeta({title: result.title, company: result.company, sourceUrl: result.url});
       if (result.company) setCompanyName(result.company);
       if (result.title) setRoleTitle(result.title);
+      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: `I fetched ${result.title ?? 'the job posting'}${result.company ? ` at ${result.company}` : ''}. I’ll use the extracted description for the comparison.`}]);
+      if (analyzeAfter && aiMode === 'cloud') requestCloudAnalysis({text: result.text, meta: {title: result.title, company: result.company, sourceUrl: result.url}});
     } catch (cause) { setJobError(cause instanceof Error ? cause.message : 'Unable to extract this page.'); }
     finally { setExtracting(false); }
   };
 
-  const runCloudAnalysis = useCallback(async () => {
-    if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
-    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
+  const runCloudAnalysis = useCallback(async (override?: {text: string; meta: typeof jobMeta}) => {
+    const currentText = override?.text ?? jobText;
+    const currentMeta = override?.meta ?? jobMeta;
+    if (currentText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
+    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: currentMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: currentMeta.sourceUrl, title: currentMeta.title, company: currentMeta.company, text: currentText}, options: {maxSuggestions: 3, language: 'en'}};
     analysisRequestRef.current = request;
     setAnalysis(null);
     setHandledSuggestions({});
@@ -271,11 +280,12 @@ export function App() {
     }
   }, [document, jobMeta, jobText]);
 
-  const requestCloudAnalysis = () => {
-    if (!cloudConsent) { setPendingCloudAction('analysis'); setShowConsent(true); return; }
-    if (!companyName && jobMeta.company) setCompanyName(jobMeta.company);
-    if (!roleTitle && jobMeta.title) setRoleTitle(jobMeta.title);
-    void runCloudAnalysis();
+  const requestCloudAnalysis = (override?: {text: string; meta: typeof jobMeta}) => {
+    if (!cloudConsent) { pendingCloudRequestRef.current = override ?? null; setPendingCloudAction('analysis'); setShowConsent(true); return; }
+    const currentMeta = override?.meta ?? jobMeta;
+    if (!companyName && currentMeta.company) setCompanyName(currentMeta.company);
+    if (!roleTitle && currentMeta.title) setRoleTitle(currentMeta.title);
+    void runCloudAnalysis(override);
   };
 
   const runResearch = useCallback(async () => {
@@ -343,14 +353,39 @@ export function App() {
     }
   }, [document, roleTitle, companyName, jobText, jobMeta]);
 
+  const submitTailorMessage = (inputOverride?: string) => {
+    const message = (inputOverride ?? tailorInput).trim();
+    if (!message || cloudBusy || extracting) return;
+    setTailorInput('');
+    setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'user', text: message}]);
+
+    if (/^https?:\/\/\S+$/i.test(message)) {
+      void handleExtract(message, true);
+      return;
+    }
+    if (!analysis && message.length >= 40) {
+      clearJobDerivedResults();
+      setJobText(message);
+      setJobMeta({});
+      if (aiMode === 'cloud') requestCloudAnalysis({text: message, meta: {}});
+      else setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: gemma.status === 'ready' ? 'The job description is ready. Choose Analyze locally to start the private comparison.' : 'The job description is ready. Load the private model once, then I can analyze it on this device.'}]);
+      return;
+    }
+
+    const reply = analysis ? answerFromAnalysis(message, analysis, handledSuggestions) : 'Send a full job description or URL first. I’ll compare it with your CV, then you can ask about strengths, gaps, or suggested edits.';
+    setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: reply}]);
+  };
+
   const grantCloudConsent = () => {
     try { localStorage.setItem(CLOUD_CONSENT_KEY, 'granted'); } catch { /* storage unavailable */ }
     setCloudConsent(true);
     setShowConsent(false);
     const action = pendingCloudAction;
+    const pendingRequest = pendingCloudRequestRef.current;
+    pendingCloudRequestRef.current = null;
     setPendingCloudAction(null);
     if (action === 'interview') void runInterviewKit();
-    else void runCloudAnalysis();
+    else void runCloudAnalysis(pendingRequest ?? undefined);
   };
 
   const runLocalAnalysis = (repair = false) => {
@@ -399,8 +434,18 @@ export function App() {
   };
 
   const accept = (suggestion: AiAnalysisResult['suggestions'][number]) => {
-    try { const applied = applySuggestion(document, suggestion); updateDocument(applied.document, true); setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'})); }
+    try {
+      const applied = applySuggestion(document, suggestion);
+      updateDocument(applied.document, true);
+      setHandledSuggestions(state => ({...state, [suggestion.id]: 'accepted'}));
+      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: `Applied the ${suggestion.target.section} edit. The original is preserved in Undo.`}]);
+    }
     catch (cause) { setAnalysisError(cause instanceof Error ? cause.message : 'Unable to apply this suggestion.'); }
+  };
+
+  const reject = (suggestionId: string) => {
+    setHandledSuggestions(state => ({...state, [suggestionId]: 'rejected'}));
+    setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: 'Skipped that edit. Your CV was not changed.'}]);
   };
 
   const formatBytes = (bytes: number) => `${(bytes / 1_000_000_000).toFixed(2)} GB`;
@@ -452,20 +497,49 @@ export function App() {
           <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
-          <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. I compare it with your CV and propose only truthful edits you can review.</div></div>
+          <section className="border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
+              <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${cloudBusy || extracting || gemma.status === 'generating' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-500">{aiMode === 'cloud' ? 'Cloud copilot' : 'Private copilot'}</span></div>
+              <div className="flex border border-white/10 p-0.5" role="tablist" aria-label="AI engine">
+                <button role="tab" aria-label="Cloud" aria-selected={aiMode === 'cloud'} className={`focus-ring px-2.5 py-1.5 text-[10px] ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={12} className="mr-1 inline" />Cloud</button>
+                <button role="tab" aria-label="Private · Local" aria-selected={aiMode === 'local'} className={`focus-ring px-2.5 py-1.5 text-[10px] ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={12} className="mr-1 inline" />Private</button>
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="AI engine">
-            <button role="tab" aria-selected={aiMode === 'cloud'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={14} />Cloud</button>
-            <button role="tab" aria-selected={aiMode === 'local'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={14} />Private · Local</button>
-          </div>
+            <div className="max-h-[420px] space-y-4 overflow-y-auto px-3 py-4" aria-live="polite">
+              <ChatBubble role="assistant">Send me a job URL or paste the description. After the comparison, keep chatting to ask about your fit, honest gaps, or the edits I suggest.</ChatBubble>
+              {jobText && !tailorMessages.some(message => message.role === 'user') && <ChatBubble role="user">{jobMeta.title ? `${jobMeta.title}${jobMeta.company ? ` · ${jobMeta.company}` : ''}` : compactJobMessage(jobText)}</ChatBubble>}
+              {tailorMessages.map(message => <ChatBubble key={message.id} role={message.role}>{message.text}</ChatBubble>)}
+              {extracting && <ChatStatus>Reading and sanitizing the job page…</ChatStatus>}
+              {cloudBusy && <ChatStatus>Comparing the job with your CV and checking every proposed edit…</ChatStatus>}
+              {gemma.status === 'generating' && activeStage && activeStage !== 'design' && <ChatStatus>{analysisActionLabel}</ChatStatus>}
+              {analysis && <ChatBubble role="assistant">{analysis.fitSummary} Ask “What are my gaps?” or review the evidence-backed edits below.</ChatBubble>}
+            </div>
 
-          <section className="border border-white/10 bg-white/[.02] p-4"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={9} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></section>
+            {analysis && <div className="flex flex-wrap gap-2 border-t border-white/10 px-3 py-2.5">
+              {['What are my strongest matches?', 'What are my gaps?', 'Which edit should I review first?'].map(prompt => <button key={prompt} className="focus-ring border border-white/10 px-2.5 py-1.5 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={() => submitTailorMessage(prompt)}>{prompt}</button>)}
+            </div>}
+
+            <div className="border-t border-white/10 p-3">
+              <label className="sr-only" htmlFor="tailor-message">Message CV Copilot</label>
+              <div className="flex items-end gap-2 rounded-sm border border-white/15 bg-black p-2 focus-within:border-white/40">
+                <textarea id="tailor-message" rows={2} className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-5 text-neutral-200 outline-none" placeholder={analysis ? 'Ask about your fit, gaps, or suggested edits…' : 'Paste a job URL or job description…'} value={tailorInput} onChange={event => setTailorInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitTailorMessage(); } }} />
+                <button aria-label="Send message" className="focus-ring grid h-9 w-9 shrink-0 place-items-center bg-white text-black disabled:opacity-30" disabled={!tailorInput.trim() || cloudBusy || extracting} onClick={() => submitTailorMessage()}><Send size={15} /></button>
+              </div>
+              <p className="mt-2 font-mono text-[8px] uppercase tracking-wider text-neutral-700">Enter to send · Shift+Enter for a new line · AI edits always need approval</p>
+            </div>
+
+            <details className="border-t border-white/10 px-3 py-2.5 text-xs text-neutral-500">
+              <summary className="focus-ring cursor-pointer select-none hover:text-white">Edit job details manually</summary>
+              <div className="mt-3"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={6} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></div>
+            </details>
+          </section>
 
           {aiMode === 'cloud' ? <section className="border border-white/10 bg-white/[.02] p-4">
             <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Cloud AI</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">Recommended</p></div><span className={`mt-1 h-2 w-2 rounded-full ${cloudBusy ? 'bg-amber-400' : 'bg-emerald-400'}`} /></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Your name, email, phone, location, and links are removed before anything is sent. Employment content — roles, dates, achievements — is included so the model can compare it with the role. <button className="text-neutral-300 underline underline-offset-2 hover:text-white" onClick={() => setAiMode('local')}>Use Private local mode instead</button>.</p>
             {showConsent && <div className="mt-4 border border-amber-400/25 bg-amber-400/5 p-3"><p className="text-xs leading-5 text-amber-100/90">This sends your CV's employment content and the job description to our cloud AI provider, which may use the content to improve its products. Your name and contact details are removed first. Continue?</p><div className="mt-3 flex gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); setAiMode('local'); }}>Switch to Private Mode</button></div></div>}
-            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={cloudBusy || jobText.trim().length < 40 || !cvHasContent} onClick={requestCloudAnalysis}>{cloudBusy ? <><LoaderCircle className="animate-spin" size={14} />Analyzing…</> : <><WandSparkles size={14} />Analyze CV</>}</button>
+            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={cloudBusy || jobText.trim().length < 40 || !cvHasContent} onClick={() => requestCloudAnalysis()}>{cloudBusy ? <><LoaderCircle className="animate-spin" size={14} />Analyzing…</> : <><WandSparkles size={14} />Analyze CV</>}</button>
             {!cvHasContent && <p className="mt-2 text-[10px] leading-4 text-neutral-600">Add CV content before analysis.</p>}
           </section> : <section className="border border-white/10 bg-white/[.02] p-4">
             <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">On-device model</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">{gemma.status.replace('-', ' ')}</p></div><span className={`mt-1 h-2 w-2 rounded-full ${gemma.status === 'ready' ? 'bg-emerald-400' : gemma.status === 'error' ? 'bg-red-400' : 'bg-neutral-700'}`} /></div>
@@ -481,7 +555,7 @@ export function App() {
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
           {analysisNotice && <p className="border border-amber-400/20 bg-amber-400/5 p-3 text-xs leading-5 text-amber-200">{analysisNotice}</p>}
           {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
-          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
+          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={reject} />}
           {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">
             <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Globe size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Optional · cited</p><h3 id="research-title" className="mt-1 font-semibold">Research the company</h3></div></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Uses Google Search to build a cited briefing on the company and role. Sends only the company, role, and public job text — never your CV or contact details. Individual people and social profiles are excluded.</p>
@@ -531,6 +605,41 @@ export function App() {
       </div>
     </div>}
   </main>;
+}
+
+function ChatBubble({role, children}: {role: TailorMessage['role']; children: React.ReactNode}) {
+  return <div className={`flex items-start gap-2.5 ${role === 'user' ? 'justify-end' : ''}`}>
+    {role === 'assistant' && <div className="grid h-7 w-7 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={13} /></div>}
+    <div className={`max-w-[88%] whitespace-pre-wrap border px-3 py-2.5 text-sm leading-5 ${role === 'user' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-white/[.04] text-neutral-300'}`}>{children}</div>
+  </div>;
+}
+
+function ChatStatus({children}: {children: React.ReactNode}) {
+  return <div className="flex items-center gap-2 pl-9 font-mono text-[9px] uppercase tracking-wider text-neutral-600"><LoaderCircle className="animate-spin" size={12} /><span>{children}</span></div>;
+}
+
+function compactJobMessage(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact;
+}
+
+function answerFromAnalysis(question: string, analysis: AiAnalysisResult, handled: Record<string, 'accepted' | 'rejected'>): string {
+  const normalized = question.toLowerCase();
+  if (/gap|missing|weak|lack/.test(normalized)) {
+    if (!analysis.gaps.length) return 'I did not find a clear evidence gap in this comparison. Review the verified matches and the job posting before treating that as a guarantee.';
+    return `Here are the honest gaps I found:\n${analysis.gaps.map(gap => `• ${gap.requirement}: ${gap.explanation}`).join('\n')}`;
+  }
+  if (/match|strength|strong|fit/.test(normalized)) {
+    if (!analysis.matchedRequirements.length) return `${analysis.fitSummary}\n\nI could not verify a specific requirement from the current CV, so I won’t claim one.`;
+    return `${analysis.fitSummary}\n${analysis.matchedRequirements.map(match => `• ${match.requirement}: ${match.evidence}`).join('\n')}`;
+  }
+  if (/edit|suggest|improv|change|rewrite/.test(normalized)) {
+    const pending = analysis.suggestions.filter(suggestion => !handled[suggestion.id]);
+    if (!pending.length) return 'There are no unreviewed edits left. I will never change the CV silently; accepted changes remain reversible with Undo.';
+    const first = pending[0];
+    return `Review the ${first.target.section} edit first: ${first.reason} The proposed wording is shown below with Accept and Reject controls.`;
+  }
+  return `${analysis.fitSummary}\n\nI can answer from the verified analysis without another AI call. Try asking about your strongest matches, honest gaps, or which suggested edit to review first.`;
 }
 
 function AnalysisPanel({analysis, document, handled, generatingSuggestions, generationElapsedLabel, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; generationElapsedLabel: string; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {

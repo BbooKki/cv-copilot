@@ -199,6 +199,29 @@ describe('cloud analysis (default)', () => {
     expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
   });
 
+  it('starts analysis from the chat composer and answers follow-ups without another cloud call', async () => {
+    cloudHarness.analyze.mockResolvedValue({
+      protocolVersion: 1,
+      fitSummary: 'The CV is a partial match for this frontend role.',
+      matchedRequirements: [{requirement: 'React', evidence: 'The CV includes React experience.'}],
+      gaps: [{requirement: 'Accessibility testing', explanation: 'The CV has no explicit accessibility testing evidence.', resolvableFromExistingFacts: false}],
+      warnings: [],
+      suggestions: [],
+    });
+
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Message CV Copilot'), {target: {value: 'Frontend role requiring React, TypeScript, accessibility testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Send message'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+
+    expect(await screen.findByText('The CV is a partial match for this frontend role.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'What are my gaps?'}));
+    expect((await screen.findAllByText(/The CV has no explicit accessibility testing evidence/)).length).toBeGreaterThan(1);
+    expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a retryable error without inserting fictional analysis when live AI is unavailable', async () => {
     cloudHarness.analyze.mockRejectedValue(new Error('The AI service is busy. Please try again in a moment.'));
 

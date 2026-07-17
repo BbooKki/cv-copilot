@@ -18,6 +18,7 @@ Cloud AI is the recommended fast analysis path and Gemma remains an optional on-
 - Name, email, phone, location, website, and personal links are removed before provider submission.
 - The server accepts fixed operation envelopes, constructs prompts itself, and enforces body, token, timeout, retry, per-client, and daily limits.
 - Cloud failure returns an actionable error; fictional fixtures remain test-only.
+- Conversational follow-ups about fit, matches, gaps, and pending edits are reconstructed from the already validated analysis in the browser. They do not send conversation history or consume another provider request.
 - Research inputs are bounded as untrusted data. Each displayed company claim must retain at least one non-social HTTP(S) citation from grounding metadata.
 - Interview model prose is not trusted as a candidate pitch. The application rebuilds the pitch from exact fields selected by validated evidence IDs.
 - Outreach messages use deterministic local templates and consume no model quota.

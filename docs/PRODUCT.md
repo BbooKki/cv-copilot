@@ -24,7 +24,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 
 1. Start with a blank CV or a locally saved draft.
 2. Build the CV from the Copilot pane using precise field controls, with a live paper preview beside it.
-3. Paste a job URL or job-description text in the Copilot pane.
+3. Send a job URL or job-description text through the Tailor conversation.
 4. Choose recommended cloud analysis or optional on-device Private Mode.
 5. Analyze fit, review evidence, and accept or reject field-level suggestions.
 6. Optionally research the company with user-triggered Google grounding and claim-level citations.
@@ -35,7 +35,8 @@ A technically comfortable job seeker who already has work history and wants a fa
 ## Workspace model
 
 - Laptop and desktop widths from `1024px` use two primary panes: a sticky live PDF-style preview on the left and CV Copilot on the right.
-- The Copilot pane combines structured editing, job input, local-AI controls, and reviewable suggestion cards. It is not an unconstrained chatbot.
+- The Copilot pane combines structured editing with a guided Tailor conversation, local-AI controls, and reviewable suggestion cards. The conversation accepts job input and follow-up questions about validated fit, gaps, and edits; it is not an unconstrained general-purpose chatbot.
+- Tailor displays user and assistant messages plus visible retrieval and generation progress. Follow-up answers reuse the validated analysis locally whenever possible instead of spending another cloud request.
 - Tailor exposes cloud and Private Mode explicitly. Every operation that sends CV employment content requires versioned cloud consent.
 - Selecting an editing section exposes its exact fields; users do not need to express precise facts such as dates or contact details conversationally.
 - AI changes always remain explicit accept/reject actions with original and proposed text.
