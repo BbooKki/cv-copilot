@@ -188,7 +188,7 @@ describe('cloud analysis (default)', () => {
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
 
-    fireEvent.click(screen.getByRole('button', {name: /Analyze with Gemini/}));
+    fireEvent.click(screen.getByRole('button', {name: /Analyze CV/}));
     expect(cloudHarness.analyze).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
 
@@ -203,7 +203,7 @@ describe('cloud analysis (default)', () => {
     fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
-    fireEvent.click(screen.getByRole('button', {name: /Analyze with Gemini/}));
+    fireEvent.click(screen.getByRole('button', {name: /Analyze CV/}));
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
 
     expect(await screen.findByText(/Sample result:/)).toBeInTheDocument();
