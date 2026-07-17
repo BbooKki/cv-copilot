@@ -1,11 +1,13 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Download, FileText, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
 import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, validateSuggestionTarget} from '../ai/suggestions';
 import {analyzeWithCloud} from '../ai/cloudClient';
+import {researchCompany} from '../ai/researchClient';
+import type {GroundedCompanyBrief} from '../ai/research';
 import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
@@ -36,6 +38,11 @@ export function App() {
   });
   const [showConsent, setShowConsent] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [roleTitle, setRoleTitle] = useState('');
+  const [companyBrief, setCompanyBrief] = useState<GroundedCompanyBrief | null>(null);
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [researchError, setResearchError] = useState('');
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
@@ -175,6 +182,8 @@ export function App() {
     try {
       const result = await extractJob(jobUrl);
       setJobText(result.text); setJobMeta({title: result.title, company: result.company, sourceUrl: result.url});
+      if (result.company) setCompanyName(result.company);
+      if (result.title) setRoleTitle(result.title);
     } catch (cause) { setJobError(cause instanceof Error ? cause.message : 'Unable to extract this page.'); }
     finally { setExtracting(false); }
   };
@@ -203,8 +212,30 @@ export function App() {
 
   const requestCloudAnalysis = () => {
     if (!cloudConsent) { setShowConsent(true); return; }
+    if (!companyName && jobMeta.company) setCompanyName(jobMeta.company);
+    if (!roleTitle && jobMeta.title) setRoleTitle(jobMeta.title);
     void runCloudAnalysis();
   };
+
+  const runResearch = useCallback(async () => {
+    const company = companyName.trim();
+    if (!company) { setResearchError('Add a company name to research.'); return; }
+    setResearchBusy(true);
+    setResearchError('');
+    setCompanyBrief(null);
+    try {
+      const brief = await researchCompany({
+        company,
+        role: roleTitle.trim() || undefined,
+        jobText: jobText.trim() ? jobText.slice(0, 6_000) : undefined,
+      });
+      setCompanyBrief(brief);
+    } catch (cause) {
+      setResearchError(cause instanceof Error ? cause.message : 'Company research failed. Job-only preparation still applies.');
+    } finally {
+      setResearchBusy(false);
+    }
+  }, [companyName, roleTitle, jobText]);
 
   const grantCloudConsent = () => {
     try { localStorage.setItem('cvcopilot.cloudConsent', 'granted'); } catch { /* storage unavailable */ }
@@ -336,6 +367,22 @@ export function App() {
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
           {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
           {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={id => setHandledSuggestions(state => ({...state, [id]: 'rejected'}))} />}
+          {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">
+            <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Globe size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Optional · cited</p><h3 id="research-title" className="mt-1 font-semibold">Research the company</h3></div></div>
+            <p className="mt-3 text-xs leading-5 text-neutral-500">Uses Google Search to build a cited briefing on the company and role. Sends only the company, role, and public job text — never your CV or contact details. Individual people and social profiles are excluded.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Company</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={companyName} onChange={event => setCompanyName(event.target.value)} placeholder="Acme Inc." /></label>
+              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Role · optional</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={roleTitle} onChange={event => setRoleTitle(event.target.value)} placeholder="Frontend Engineer" /></label>
+            </div>
+            <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={researchBusy || !companyName.trim()} onClick={() => void runResearch()}>{researchBusy ? <><LoaderCircle className="animate-spin" size={14} />Researching with Google…</> : <><Search size={14} />Research this company with Google</>}</button>
+            {researchError && <p className="mt-3 text-xs leading-5 text-amber-300">{researchError}</p>}
+            {companyBrief && <div className="mt-4 border border-white/10 bg-black p-3">
+              <p className="text-sm leading-6 text-neutral-200">{companyBrief.summary}</p>
+              {companyBrief.priorities.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Current priorities</p><ul className="mt-2 space-y-1">{companyBrief.priorities.map((priority, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {priority}</li>)}</ul></div>}
+              {companyBrief.roleContext && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">For this role</p><p className="mt-1 text-xs leading-5 text-neutral-400">{companyBrief.roleContext}</p></div>}
+              <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{companyBrief.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
+            </div>}
+          </section>}
           <CloudPanel document={document} onLoad={updateDocument} />
         </div>}
       </aside>

@@ -2,7 +2,8 @@ import type {IncomingMessage, ServerResponse} from 'node:http';
 import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
-import {generateText, GeminiError} from './_lib/gemini.js';
+import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
+import {generateGrounded, generateText, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
 export const config = {maxDuration: 60};
@@ -27,6 +28,7 @@ const analyzeRequestSchema = z.object({
 
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
+  z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
 ]);
 
 const MAX_BODY_BYTES = 200_000;
@@ -44,6 +46,12 @@ export default async function handler(request: IncomingMessage, response: Server
       const result = await analyze(body.request);
       response.statusCode = 200;
       response.end(JSON.stringify(result));
+      return;
+    }
+    if (body.operation === 'research-company') {
+      const brief = await research(body.input);
+      response.statusCode = 200;
+      response.end(JSON.stringify(brief));
       return;
     }
     response.statusCode = 400;
@@ -66,6 +74,15 @@ async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
     } catch {
       throw new GeminiError('invalid-output', 'The AI returned an unusable response. Please try again.', 502);
     }
+  }
+}
+
+async function research(input: CompanyResearchInput): Promise<GroundedCompanyBrief> {
+  const {text, sources} = await generateGrounded(buildCompanyResearchPrompt(input), {temperature: 0.3, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  try {
+    return parseCompanyBrief(text, sources, input.company);
+  } catch (cause) {
+    throw new GeminiError('invalid-output', cause instanceof Error ? cause.message : 'No usable company research was found.', 422);
   }
 }
 

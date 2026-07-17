@@ -19,10 +19,15 @@ export class GeminiError extends Error {
   }
 }
 
-type GenerateOptions = {temperature?: number; maxOutputTokens?: number; json?: boolean};
+export type GenerateOptions = {temperature?: number; maxOutputTokens?: number; json?: boolean};
+export type GroundingSource = {title: string; url: string};
 
 type GeminiResponse = {
-  candidates?: Array<{finishReason?: string; content?: {parts?: Array<{text?: string}>}}>;
+  candidates?: Array<{
+    finishReason?: string;
+    content?: {parts?: Array<{text?: string}>};
+    groundingMetadata?: {groundingChunks?: Array<{web?: {uri?: string; title?: string}}>};
+  }>;
   promptFeedback?: {blockReason?: string};
 };
 
@@ -32,14 +37,48 @@ type GeminiResponse = {
  * with a short backoff before surfacing as a "busy" error.
  */
 export async function generateText(prompt: string, options: GenerateOptions = {}): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new GeminiError('auth', 'The server is not configured for cloud AI.', 500);
+  const response = await withRetry(() => sendRequest(buildBody(prompt, options, false)));
+  return extractText(response);
+}
 
+/**
+ * Calls Gemini with the Google Search tool enabled and returns the grounded
+ * text plus the real web sources the model cited. JSON mode is intentionally
+ * NOT used here because responseMimeType cannot be combined with search tools.
+ */
+export async function generateGrounded(prompt: string, options: GenerateOptions = {}): Promise<{text: string; sources: GroundingSource[]}> {
+  const response = await withRetry(() => sendRequest(buildBody(prompt, options, true)));
+  const text = extractText(response);
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const sources: GroundingSource[] = [];
+  const seen = new Set<string>();
+  for (const chunk of chunks) {
+    const url = chunk.web?.uri;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    sources.push({title: (chunk.web?.title ?? url).slice(0, 200), url});
+  }
+  return {text, sources};
+}
+
+function buildBody(prompt: string, options: GenerateOptions, grounded: boolean): Record<string, unknown> {
+  return {
+    contents: [{role: 'user', parts: [{text: prompt}]}],
+    ...(grounded ? {tools: [{google_search: {}}]} : {}),
+    generationConfig: {
+      temperature: options.temperature ?? 0.2,
+      maxOutputTokens: options.maxOutputTokens ?? 2_048,
+      ...(options.json && !grounded ? {responseMimeType: 'application/json'} : {}),
+    },
+  };
+}
+
+async function withRetry(fn: () => Promise<GeminiResponse>): Promise<GeminiResponse> {
   let lastBusy: GeminiError | null = null;
   for (let attempt = 0; attempt <= GEMINI_RETRIES; attempt += 1) {
     if (attempt > 0) await delay(500 * attempt);
     try {
-      return await attemptGenerate(apiKey, prompt, options);
+      return await fn();
     } catch (cause) {
       if (cause instanceof GeminiError && cause.code === 'busy') {
         lastBusy = cause;
@@ -51,7 +90,10 @@ export async function generateText(prompt: string, options: GenerateOptions = {}
   throw lastBusy ?? new GeminiError('busy', 'The AI service is busy. Please try again in a moment.', 503);
 }
 
-async function attemptGenerate(apiKey: string, prompt: string, options: GenerateOptions): Promise<string> {
+async function sendRequest(body: Record<string, unknown>): Promise<GeminiResponse> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new GeminiError('auth', 'The server is not configured for cloud AI.', 500);
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   let response: Response;
@@ -60,14 +102,7 @@ async function attemptGenerate(apiKey: string, prompt: string, options: Generate
       method: 'POST',
       headers: {'content-type': 'application/json', 'x-goog-api-key': apiKey},
       signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{role: 'user', parts: [{text: prompt}]}],
-        generationConfig: {
-          temperature: options.temperature ?? 0.2,
-          maxOutputTokens: options.maxOutputTokens ?? 2_048,
-          ...(options.json ? {responseMimeType: 'application/json'} : {}),
-        },
-      }),
+      body: JSON.stringify(body),
     });
   } catch {
     if (controller.signal.aborted) throw new GeminiError('network', 'The AI service did not respond in time.', 504);
@@ -83,11 +118,16 @@ async function attemptGenerate(apiKey: string, prompt: string, options: Generate
 
   const payload = (await response.json().catch(() => null)) as GeminiResponse | null;
   if (payload?.promptFeedback?.blockReason) throw new GeminiError('safety', 'The AI service blocked this request.', 422);
-  const candidate = payload?.candidates?.[0];
-  if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'PROHIBITED_CONTENT') {
+  const finishReason = payload?.candidates?.[0]?.finishReason;
+  if (finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT') {
     throw new GeminiError('safety', 'The AI service blocked this content.', 422);
   }
-  const text = candidate?.content?.parts?.map(part => part.text ?? '').join('').trim();
+  if (!payload) throw new GeminiError('invalid-output', 'The AI service returned an empty response.', 502);
+  return payload;
+}
+
+function extractText(response: GeminiResponse): string {
+  const text = response.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('').trim();
   if (!text) throw new GeminiError('invalid-output', 'The AI service returned an empty response.', 502);
   return text;
 }
