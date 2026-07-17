@@ -8,6 +8,9 @@ dist/
 coverage/
 playwright-report/
 test-results/
+output/
+.playwright-cli/
+*.tsbuildinfo
 *.log
 .DS_Store
 supabase/.temp/
