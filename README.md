@@ -42,3 +42,15 @@ Useful checks are `npm run typecheck`, `npm test`, and `npm run build`. The Gemm
 ## Cloud schema
 
 The committed migration in `supabase/migrations/` creates resumes, job targets, and AI analyses with explicit authenticated grants, row-level security, owner-only policies, and same-user foreign-key integrity. The app remains fully usable when cloud configuration is absent.
+
+## Supabase Auth setup
+
+Cloud backup uses passwordless email magic links. The browser receives only the project URL and a publishable key; never add a secret or service-role key to a `VITE_` variable.
+
+1. Create or select the CV Copilot project in the intended Supabase account.
+2. Link the checkout with `supabase link --profile hongfeiliu --project-ref <project-ref>`.
+3. Apply the committed migration through the normal Supabase migration workflow.
+4. In **Auth → URL Configuration**, set the Site URL to the production application URL. Add the exact production URL, `http://localhost:5173/**`, and the required Vercel preview pattern to the redirect allow list.
+5. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_CLOUD_ENABLED=true` locally and in the deployment environment.
+
+The magic-link redirect returns to the current application path. Query parameters and URL fragments are removed before the redirect URL is sent to Supabase. A signed-in user still chooses when to upload by pressing **Save to cloud**; signing in alone does not upload CV content.

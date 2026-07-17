@@ -124,6 +124,7 @@ Suggested hierarchy:
 - Laptop and desktop (`>=1024px`): centered, sticky CV preview on the left (`60-65%`) and a focused Copilot pane on the right (`35-40%`).
 - The Copilot pane provides clear `Edit` and `Tailor` modes within one continuous workspace. Structured fields remain the primary control for exact CV facts; local-AI output appears as reviewable suggestion cards.
 - Keep template, undo, local-save status, and PDF export in the top toolbar so they remain available from either mode.
+- Keep account creation, sign-in state, and sign-out in a persistent toolbar control on desktop and mobile. Account UI must explain that cloud upload happens only after an explicit save action.
 - Use a dark neutral workspace behind the white paper so page edges are obvious.
 - Keep the primary toolbar sticky when useful, with a black translucent background and bottom border.
 - Mobile: switch between `CV` and `Copilot` instead of squeezing both panes side by side.
