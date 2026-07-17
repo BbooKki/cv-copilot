@@ -5,6 +5,8 @@ import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
 import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, validateSuggestionTarget} from '../ai/suggestions';
+import {analyzeWithCloud} from '../ai/cloudClient';
+import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
@@ -28,6 +30,12 @@ export function App() {
   const [undoStack, setUndoStack] = useState<CvDocument[]>([]);
   const [view, setView] = useState<View>('copilot');
   const [copilotMode, setCopilotMode] = useState<CopilotMode>('edit');
+  const [aiMode, setAiMode] = useState<'cloud' | 'local'>('cloud');
+  const [cloudConsent, setCloudConsent] = useState(() => {
+    try { return localStorage.getItem('cvcopilot.cloudConsent') === 'granted'; } catch { return false; }
+  });
+  const [showConsent, setShowConsent] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState(false);
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
   const [jobMeta, setJobMeta] = useState<{title?: string; company?: string; sourceUrl?: string}>({});
@@ -171,6 +179,40 @@ export function App() {
     finally { setExtracting(false); }
   };
 
+  const runCloudAnalysis = useCallback(async () => {
+    if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
+    const request: AiAnalysisRequest = {protocolVersion: 1, cv: document, job: {source: jobMeta.sourceUrl ? 'url' : 'pasted', sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
+    analysisRequestRef.current = request;
+    setAnalysis(null);
+    setHandledSuggestions({});
+    setAnalysisError('');
+    setInvalidAnalysisOutput(null);
+    setCloudBusy(true);
+    try {
+      const result = await analyzeWithCloud(request);
+      assertFitEvidenceExists(document, result);
+      assertSuggestionsAreGrounded(document, result.suggestions);
+      setAnalysis(result);
+    } catch (cause) {
+      const message = cause instanceof AiProviderError || cause instanceof Error ? cause.message : 'Cloud analysis failed.';
+      setAnalysisError(message);
+    } finally {
+      setCloudBusy(false);
+    }
+  }, [document, jobMeta, jobText]);
+
+  const requestCloudAnalysis = () => {
+    if (!cloudConsent) { setShowConsent(true); return; }
+    void runCloudAnalysis();
+  };
+
+  const grantCloudConsent = () => {
+    try { localStorage.setItem('cvcopilot.cloudConsent', 'granted'); } catch { /* storage unavailable */ }
+    setCloudConsent(true);
+    setShowConsent(false);
+    void runCloudAnalysis();
+  };
+
   const runLocalAnalysis = (repair = false) => {
     if (jobText.trim().length < 40) { setAnalysisError('Add a meaningful job description before analysis.'); return; }
     const request = repair && analysisRequestRef.current ? analysisRequestRef.current : {protocolVersion: 1 as const, cv: document, job: {source: jobMeta.sourceUrl ? 'url' as const : 'pasted' as const, sourceUrl: jobMeta.sourceUrl, title: jobMeta.title, company: jobMeta.company, text: jobText}, options: {maxSuggestions: 3, language: 'en'}};
@@ -232,7 +274,7 @@ export function App() {
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <div className="flex min-w-0 items-center gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center border border-white/20 bg-white text-black"><FileText size={18} /></div><div className="min-w-0"><h1 className="truncate font-display text-base font-semibold">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private · Local AI · Truthful edits</p></div></div>
+        <div className="flex min-w-0 items-center gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center border border-white/20 bg-white text-black"><FileText size={18} /></div><div className="min-w-0"><h1 className="truncate font-display text-base font-semibold">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Cloud AI · Private mode · Truthful edits</p></div></div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 md:flex"><StatusPill icon={<HardDrive size={12} />} label={saveState === 'saving' ? 'Saving locally' : saveState === 'error' ? 'Save failed' : 'Saved locally'} tone={saveState === 'error' ? 'error' : 'neutral'} />
             <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
@@ -265,10 +307,22 @@ export function App() {
           <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
-          <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. Your CV stays in this browser while Gemma compares it with the role.</div></div>
+          <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Paste a job description or give me its URL. I compare it with your CV and propose only truthful edits you can review.</div></div>
+
+          <div className="grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="AI engine">
+            <button role="tab" aria-selected={aiMode === 'cloud'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={14} />Cloud · Gemini</button>
+            <button role="tab" aria-selected={aiMode === 'local'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={14} />Private · Local</button>
+          </div>
+
           <section className="border border-white/10 bg-white/[.02] p-4"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={9} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { setJobText(event.target.value); setJobMeta({}); }} /></section>
 
-          <section className="border border-white/10 bg-white/[.02] p-4">
+          {aiMode === 'cloud' ? <section className="border border-white/10 bg-white/[.02] p-4">
+            <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Gemini 2.5 Flash</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">Cloud · free tier</p></div><span className={`mt-1 h-2 w-2 rounded-full ${cloudBusy ? 'bg-amber-400' : 'bg-emerald-400'}`} /></div>
+            <p className="mt-3 text-xs leading-5 text-neutral-500">Your name, email, phone, location, and links are removed before anything is sent. Employment content — roles, dates, achievements — is included so the model can compare it with the role. <button className="text-neutral-300 underline underline-offset-2 hover:text-white" onClick={() => setAiMode('local')}>Use Private local mode instead</button>.</p>
+            {showConsent && <div className="mt-4 border border-amber-400/25 bg-amber-400/5 p-3"><p className="text-xs leading-5 text-amber-100/90">This sends your CV's employment content and the job description to Google's Gemini API. On the free tier, Google may use the content to improve its products. Continue?</p><div className="mt-3 flex gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setShowConsent(false); setAiMode('local'); }}>Switch to Private Mode</button></div></div>}
+            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={cloudBusy || jobText.trim().length < 40 || !cvHasContent} onClick={requestCloudAnalysis}>{cloudBusy ? <><LoaderCircle className="animate-spin" size={14} />Analyzing with Gemini…</> : <><WandSparkles size={14} />Analyze with Gemini</>}</button>
+            {!cvHasContent && <p className="mt-2 text-[10px] leading-4 text-neutral-600">Add CV content before analysis.</p>}
+          </section> : <section className="border border-white/10 bg-white/[.02] p-4">
             <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Gemma 4 E2B</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">{gemma.status.replace('-', ' ')}</p></div><span className={`mt-1 h-2 w-2 rounded-full ${gemma.status === 'ready' ? 'bg-emerald-400' : gemma.status === 'error' ? 'bg-red-400' : 'bg-neutral-700'}`} /></div>
             <div className="mt-4 space-y-2 border-y border-white/10 py-3 font-mono text-[9px] text-neutral-500"><div className="flex justify-between"><span>DOWNLOAD</span><span>{formatBytes(GEMMA_MODEL_BYTES)}</span></div><div className="flex justify-between"><span>WEBGPU</span><span>{gemma.capability.webGpu ? 'AVAILABLE' : 'UNAVAILABLE'}</span></div><div className="flex justify-between"><span>LOCAL CACHE</span><span>{gemma.cacheVerified ? 'VERIFIED' : gemma.cached ? 'SAVED' : 'EMPTY'}</span></div><div className="flex justify-between"><span>FREE STORAGE</span><span>{gemma.capability.storageAvailable === null ? 'CHECKING' : formatBytes(gemma.capability.storageAvailable)}</span></div></div>
             {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div>{gemma.status === 'initializing' && <p className="mt-3 text-[10px] leading-4 text-neutral-600">This can take up to 3 minutes. LiteRT may report an unavailable NPU while continuing normally with WebGPU.</p>}<button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
@@ -277,7 +331,7 @@ export function App() {
             {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
             {gemma.status === 'generating' && <div className="mt-3 flex items-center justify-between border border-white/10 bg-black p-3 font-mono text-[9px] uppercase tracking-wider text-neutral-500"><span>{generationPhaseLabel}</span><span>{gemma.generatedCharacters} chars local</span></div>}
             <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400 disabled:opacity-30" disabled={['downloading', 'initializing', 'generating'].includes(gemma.status)} onClick={gemma.clearCache}>Remove cached model</button>}</div>
-          </section>
+          </section>}
 
           {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
           {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}

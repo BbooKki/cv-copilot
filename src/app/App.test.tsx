@@ -35,6 +35,9 @@ vi.mock('../persistence/localResumeRepository', () => ({
 
 vi.mock('../persistence/CloudPanel', () => ({CloudPanel: () => null}));
 
+const cloudHarness = vi.hoisted(() => ({analyze: vi.fn()}));
+vi.mock('../ai/cloudClient', () => ({analyzeWithCloud: (...args: unknown[]) => cloudHarness.analyze(...args)}));
+
 describe('split tailoring flow', () => {
   beforeEach(() => {
     gemmaHarness.complete = null;
@@ -49,6 +52,7 @@ describe('split tailoring flow', () => {
 
     fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.click(screen.getByRole('tab', {name: 'Private · Local'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
     fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
 
@@ -72,6 +76,7 @@ describe('split tailoring flow', () => {
     const fullName = await screen.findByLabelText('Full name');
     fireEvent.change(fullName, {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.click(screen.getByRole('tab', {name: 'Private · Local'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
     fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
 
@@ -107,6 +112,7 @@ describe('split tailoring flow', () => {
 
     fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.click(screen.getByRole('tab', {name: 'Private · Local'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
     fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
 
@@ -132,6 +138,7 @@ describe('split tailoring flow', () => {
 
     fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.click(screen.getByRole('tab', {name: 'Private · Local'}));
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
     fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
 
@@ -156,5 +163,36 @@ describe('split tailoring flow', () => {
 
     expect(await screen.findByText(/unknown evidence ID not-in-the-cv/)).toBeInTheDocument();
     expect(screen.getByText('The CV has limited evidence for this role.')).toBeInTheDocument();
+  });
+});
+
+describe('cloud analysis (default)', () => {
+  beforeEach(() => {
+    cloudHarness.analyze.mockReset();
+    try { localStorage.clear(); } catch { /* ignore */ }
+  });
+  afterEach(cleanup);
+
+  it('asks for consent once, then runs cloud analysis and shows the fit summary', async () => {
+    cloudHarness.analyze.mockResolvedValue({
+      protocolVersion: 1,
+      fitSummary: 'Cloud analysis confirms strong front-end alignment.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [],
+      suggestions: [],
+    });
+
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+
+    fireEvent.click(screen.getByRole('button', {name: /Analyze with Gemini/}));
+    expect(cloudHarness.analyze).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+
+    expect(await screen.findByText('Cloud analysis confirms strong front-end alignment.')).toBeInTheDocument();
+    expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
   });
 });
