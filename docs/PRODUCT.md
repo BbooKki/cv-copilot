@@ -36,6 +36,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 
 - Laptop and desktop widths from `1024px` use two primary panes: a sticky live PDF-style preview on the left and CV Copilot on the right.
 - The Copilot pane combines structured editing, job input, local-AI controls, and reviewable suggestion cards. It is not an unconstrained chatbot.
+- Tailor is the single model-activation surface. Edit reuses that same ready local runtime for design recommendations instead of presenting a second download action.
 - Selecting an editing section exposes its exact fields; users do not need to express precise facts such as dates or contact details conversationally.
 - AI changes always remain explicit accept/reject actions with original and proposed text.
 - Template choice is presented visually. Gemma may recommend a tested template, professional accent, and layout density, but it cannot generate or execute arbitrary markup or CSS.

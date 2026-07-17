@@ -15,8 +15,11 @@ export function CvEditor({document, onChange}: Props) {
   return <div className="space-y-5 pb-24">
     <EditorSection title="Document" eyebrow="01 · Identity">
       <div className="grid gap-3 sm:grid-cols-2">
-        <InputField label="Document name (not printed)" value={document.title} onChange={event => update(draft => { draft.title = event.target.value; })} />
-        <InputField label="Full name" value={document.basics.fullName} onChange={event => update(draft => { draft.basics.fullName = event.target.value; })} />
+        <InputField label="Full name" value={document.basics.fullName} onChange={event => update(draft => {
+          draft.basics.fullName = event.target.value;
+          const fullName = event.target.value.trim();
+          draft.title = fullName ? `${fullName} CV` : '';
+        })} />
         <InputField label="Headline" value={document.basics.headline ?? ''} onChange={event => update(draft => { draft.basics.headline = event.target.value; })} />
         <InputField label="Location" value={document.basics.location ?? ''} onChange={event => update(draft => { draft.basics.location = event.target.value; })} />
         <InputField label="Email" type="email" value={document.basics.email ?? ''} onChange={event => update(draft => { draft.basics.email = event.target.value; })} />

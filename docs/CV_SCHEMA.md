@@ -94,6 +94,7 @@ export type CvDocument = {
 
 ## Editing behavior
 
+- `title` is internal save-list metadata derived from `basics.fullName`; users edit the printable full name directly instead of a separate non-printing title.
 - Empty optional sections do not render in templates.
 - Reordering changes array order.
 - Deleting an entry requires a reversible local undo action.
