@@ -29,7 +29,8 @@ describe('AI analysis protocol', () => {
     expect(prompt).not.toContain('+1 555 0100');
     expect(prompt).not.toContain('templateId');
     expect(prompt).toContain('Do not propose CV edits');
-    expect(prompt).toContain('Return at most 2 matched requirements, 2 gaps, and 1 warnings');
+    expect(prompt).toContain('Return at most 2 matched requirements and 2 gaps');
+    expect(prompt).not.toContain('"warnings"');
     expect(() => JSON.parse(cvFacts)).not.toThrow();
   });
 
@@ -61,7 +62,7 @@ describe('AI analysis protocol', () => {
     const suggestionPrompt = buildSuggestionPrompt(request(), fitResult(), {repair: true});
 
     expect(fitPrompt).toContain('previous response was invalid or incomplete JSON');
-    expect(fitPrompt).toContain('Return at most 1 matched requirements, 1 gaps, and 1 warnings');
+    expect(fitPrompt).toContain('Return at most 1 matched requirements and 1 gaps');
     expect(suggestionPrompt).toContain('single-suggestion limit');
     expect(suggestionPrompt).toContain('Return at most 1 suggestions');
     expect(suggestionPrompt).toContain('never truncate JSON');
@@ -81,6 +82,20 @@ describe('AI analysis protocol', () => {
     expect(() => parseFitAnalysisResult(`{"protocolVersion":1,"fitSummary":"${'x'.repeat(FIT_SUMMARY_CHAR_LIMIT + 1)}","matchedRequirements":[],"gaps":[],"warnings":[]}`)).toThrow();
     expect(() => parseSuggestionResult(`{"protocolVersion":1,"suggestions":[{"id":"suggestion","target":{"section":"summary","field":"summary"},"originalText":"","proposedText":"${'x'.repeat(SUGGESTION_TEXT_CHAR_LIMIT + 1)}","reason":"Grounded","evidenceIds":[]}]}`)).toThrow();
     expect(() => parseFitAnalysisResult('{"protocolVersion":1,"fitSummary":"Cut off","matchedRequirements":[')).toThrow();
+  });
+
+  it('discards legacy model-owned warning payloads without weakening core fit validation', () => {
+    const result = parseFitAnalysisResult(JSON.stringify({
+      protocolVersion: 1,
+      fitSummary: 'Limited evidence.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [{type: 'advisory', message: 'Model-owned warning'}],
+    }));
+
+    expect(result.warnings).toEqual(['The local model returned an unsupported advisory field. Verified fit results are shown without it.']);
+    expect(() => parseFitAnalysisResult(JSON.stringify({protocolVersion: 1, matchedRequirements: [], gaps: [], warnings: {message: 'Missing core summary'}}))).toThrow();
+    expect(() => parseFitAnalysisResult(JSON.stringify({protocolVersion: 1, fitSummary: 'Valid', matchedRequirements: [], gaps: [], unexpected: true}))).toThrow();
   });
 
   it('combines only separately validated fit and suggestion results', () => {

@@ -44,6 +44,28 @@ describe('split tailoring flow', () => {
 
   afterEach(cleanup);
 
+  it('keeps valid fit analysis when Gemma returns a legacy object-shaped warning', async () => {
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Analyze locally'}));
+
+    act(() => gemmaHarness.complete?.(JSON.stringify({
+      protocolVersion: 1,
+      fitSummary: 'The valid fit result remains usable.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [{type: 'advisory', message: 'Non-canonical warning'}],
+    })));
+
+    expect(await screen.findByText('The valid fit result remains usable.')).toBeInTheDocument();
+    expect(screen.getByText(/unsupported advisory field/)).toBeInTheDocument();
+    expect(screen.queryByText('Structured response was incomplete')).not.toBeInTheDocument();
+    expect(gemmaHarness.generate).toHaveBeenCalledTimes(2);
+  });
+
   it('preserves valid fit analysis when suggestion JSON fails and retries only suggestions', async () => {
     render(<App />);
 

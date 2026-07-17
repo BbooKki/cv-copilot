@@ -78,7 +78,7 @@ src/
 4. Normalize pasted job text or retrieve it through `/api/extract-job`.
 5. Build a bounded prompt containing the trusted instruction, CV facts, and untrusted job text in clearly delimited sections.
 6. Ask Gemma for JSON matching `AI_PROTOCOL.md`.
-7. Parse and validate the JSON; display errors without mutating the CV.
+7. Parse and validate the JSON; discard any legacy model-owned advisory field, derive warnings in the application, and display errors without mutating the CV.
 8. Apply only user-approved suggestion patches.
 9. For design requests, validate Gemma output against the fixed template, density, and accent allowlists, display the rationale, and apply only after explicit acceptance.
 
