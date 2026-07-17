@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, Mic, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, Mail, MessageSquare, Mic, PenLine, RotateCcw, Search, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
@@ -10,6 +10,8 @@ import {researchCompany} from '../ai/researchClient';
 import type {GroundedCompanyBrief} from '../ai/research';
 import {buildInterviewKit} from '../ai/interviewClient';
 import {assertInterviewKitGrounded, type InterviewKit} from '../ai/interview';
+import {buildOutreachKit} from '../ai/outreachClient';
+import type {OutreachKit} from '../ai/outreach';
 import {AiProviderError} from '../ai/provider';
 import {type CvDocument} from '../cv/schema';
 import {createBlankCv, hasCvContent} from '../cv/blank';
@@ -21,6 +23,7 @@ import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
 import {CvPreview} from '../templates/CvPreview';
 import {TemplatePicker} from '../templates/TemplatePicker';
+import {STYLE_PRESETS} from '../templates/presets';
 import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
 
@@ -49,6 +52,9 @@ export function App() {
   const [interviewKit, setInterviewKit] = useState<InterviewKit | null>(null);
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [interviewError, setInterviewError] = useState('');
+  const [outreachKit, setOutreachKit] = useState<OutreachKit | null>(null);
+  const [outreachBusy, setOutreachBusy] = useState(false);
+  const [outreachError, setOutreachError] = useState('');
   const [editingTarget, setEditingTarget] = useState<CvFieldTarget | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [jobUrl, setJobUrl] = useState('');
@@ -286,6 +292,24 @@ export function App() {
     }
   }, [document, roleTitle, companyName, jobText, jobMeta, analysis, companyBrief]);
 
+  const runOutreach = useCallback(async () => {
+    setOutreachBusy(true);
+    setOutreachError('');
+    setOutreachKit(null);
+    try {
+      const kit = await buildOutreachKit({
+        protocolVersion: 1,
+        cv: document,
+        job: {title: roleTitle.trim() || jobMeta.title, company: companyName.trim() || jobMeta.company, text: jobText},
+      });
+      setOutreachKit(kit);
+    } catch (cause) {
+      setOutreachError(cause instanceof Error ? cause.message : 'Outreach draft generation failed.');
+    } finally {
+      setOutreachBusy(false);
+    }
+  }, [document, roleTitle, companyName, jobText, jobMeta]);
+
   const grantCloudConsent = () => {
     try { localStorage.setItem('cvcopilot.cloudConsent', 'granted'); } catch { /* storage unavailable */ }
     setCloudConsent(true);
@@ -384,6 +408,11 @@ export function App() {
         {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
           <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
+          <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="presets-title">
+            <p id="presets-title" className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Style presets</p>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">One-click tested accent and density combinations.</p>
+            <div className="mt-3 flex flex-wrap gap-2">{STYLE_PRESETS.map(preset => { const active = document.settings.accentColor.toLowerCase() === preset.accentColor.toLowerCase() && document.settings.density === preset.density; return <button key={preset.id} className={`focus-ring flex items-center gap-2 border px-3 py-2 text-xs ${active ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-400 hover:border-white/30 hover:text-white'}`} onClick={() => updateSettings({accentColor: preset.accentColor, density: preset.density})}><span className="h-3 w-3 border border-white/20" style={{backgroundColor: preset.accentColor}} />{preset.name}</button>; })}</div>
+          </section>
           <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
         </div> : <div className="space-y-4 p-4 md:p-5">
@@ -441,6 +470,13 @@ export function App() {
               <div className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">30-second pitch</p><CopyButton text={interviewKit.pitch.text} /></div><p className="mt-2 text-sm leading-6 text-neutral-200">{interviewKit.pitch.text}</p></div>
               <div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Likely questions</p><ul className="mt-2 space-y-3">{interviewKit.questions.map((item, index) => <li key={index} className="border border-white/10 bg-black p-3"><p className="text-sm leading-5 text-neutral-200">{item.question}</p><p className="mt-1 text-xs leading-5 text-neutral-500">{item.rationale}</p></li>)}</ul></div>
               <div><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Questions to ask them</p><CopyButton text={interviewKit.questionsToAsk.join('\n')} label="Copy all" /></div><ul className="mt-2 space-y-1">{interviewKit.questionsToAsk.map((question, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {question}</li>)}</ul></div>
+              <div className="border-t border-white/10 pt-4">
+                <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Outreach emails</p>
+                <p className="mt-1 text-[11px] leading-4 text-neutral-600">Recruiter intro and a post-interview follow-up, with placeholders for anything not in your CV.</p>
+                <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-2.5 text-xs font-semibold disabled:opacity-30" disabled={outreachBusy} onClick={() => void runOutreach()}>{outreachBusy ? <><LoaderCircle className="animate-spin" size={14} />Drafting…</> : <><Mail size={14} />{outreachKit ? 'Regenerate emails' : 'Draft outreach emails'}</>}</button>
+                {outreachError && <p className="mt-2 text-xs leading-5 text-amber-300">{outreachError}</p>}
+                {outreachKit && <div className="mt-3 space-y-3">{[{label: 'Recruiter intro', email: outreachKit.recruiterIntro}, {label: 'Follow-up', email: outreachKit.followUp}].map(({label, email}) => <div key={label} className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{label}</p><CopyButton text={`Subject: ${email.subject}\n\n${email.body}`} /></div><p className="mt-2 text-xs font-semibold text-neutral-200">{email.subject}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-neutral-400">{email.body}</p></div>)}</div>}
+              </div>
             </div>}
           </section>}
           <CloudPanel document={document} onLoad={updateDocument} />

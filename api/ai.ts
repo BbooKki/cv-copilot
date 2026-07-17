@@ -4,6 +4,7 @@ import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
 import {buildInterviewKitPrompt, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
+import {buildOutreachPrompt, parseOutreachKit, type OutreachKit, type OutreachRequest} from '../src/ai/outreach.js';
 import {generateGrounded, generateText, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
@@ -38,10 +39,17 @@ const interviewKitRequestSchema = z.object({
   }).strict().optional(),
 });
 
+const outreachRequestSchema = z.object({
+  protocolVersion: z.literal(1),
+  cv: cvDocumentSchema,
+  job: z.object({title: z.string().max(300).optional(), company: z.string().max(200).optional(), text: z.string().min(1).max(20_000)}).strict(),
+});
+
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
   z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
   z.object({operation: z.literal('build-interview-kit'), request: interviewKitRequestSchema}).strict(),
+  z.object({operation: z.literal('build-outreach'), request: outreachRequestSchema}).strict(),
 ]);
 
 const MAX_BODY_BYTES = 200_000;
@@ -69,6 +77,12 @@ export default async function handler(request: IncomingMessage, response: Server
     }
     if (body.operation === 'build-interview-kit') {
       const kit = await interviewKit(body.request);
+      response.statusCode = 200;
+      response.end(JSON.stringify(kit));
+      return;
+    }
+    if (body.operation === 'build-outreach') {
+      const kit = await outreach(body.request);
       response.statusCode = 200;
       response.end(JSON.stringify(kit));
       return;
@@ -108,6 +122,21 @@ async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit>
       return parseInterviewKit(retry);
     } catch {
       throw new GeminiError('invalid-output', 'The AI returned an unusable interview kit. Please try again.', 502);
+    }
+  }
+}
+
+async function outreach(request: OutreachRequest): Promise<OutreachKit> {
+  const prompt = buildOutreachPrompt(request);
+  const raw = await generateText(prompt, {json: true, temperature: 0.4, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  try {
+    return parseOutreachKit(raw);
+  } catch {
+    const retry = await generateText(`${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON.`, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+    try {
+      return parseOutreachKit(retry);
+    } catch {
+      throw new GeminiError('invalid-output', 'The AI returned unusable outreach drafts. Please try again.', 502);
     }
   }
 }
