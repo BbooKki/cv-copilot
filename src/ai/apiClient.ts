@@ -31,6 +31,8 @@ function normalizeCode(code: string | undefined): AiProviderErrorCode {
       return 'invalid-output';
     case 'busy':
       return 'busy';
+    case 'not-enabled':
+      return 'unsupported';
     default:
       return 'unknown';
   }

@@ -1,6 +1,7 @@
 import {useState} from 'react';
-import {Check, Copy, ExternalLink, Globe, LoaderCircle, Mail, Mic, Search} from 'lucide-react';
-import {officialCompanyChannels, type GroundedCompanyBrief} from '../ai/research';
+import {Check, Copy, ExternalLink, Globe, LoaderCircle, Mail, Mic, Search, UsersRound} from 'lucide-react';
+import {officialCompanyChannels, officialCompanySources, type GroundedCompanyBrief} from '../ai/research';
+import type {PublicPeopleResult} from '../ai/peopleResearch';
 import type {InterviewKit} from '../ai/interview';
 import type {OutreachKit} from '../ai/outreach';
 
@@ -10,6 +11,10 @@ type Props = {
   companyBrief: GroundedCompanyBrief | null;
   researchBusy: boolean;
   researchError: string;
+  peopleResearchEnabled: boolean;
+  peopleResult: PublicPeopleResult | null;
+  peopleBusy: boolean;
+  peopleError: string;
   interviewKit: InterviewKit | null;
   interviewBusy: boolean;
   interviewError: string;
@@ -19,11 +24,12 @@ type Props = {
   onCompanyNameChange: (value: string) => void;
   onRoleTitleChange: (value: string) => void;
   onResearch: () => void;
+  onResearchPeople: () => void;
   onPrepareInterview: () => void;
   onPrepareOutreach: () => void;
 };
 
-export function ApplicationKit({companyName, roleTitle, companyBrief, researchBusy, researchError, interviewKit, interviewBusy, interviewError, outreachKit, outreachBusy, outreachError, onCompanyNameChange, onRoleTitleChange, onResearch, onPrepareInterview, onPrepareOutreach}: Props) {
+export function ApplicationKit({companyName, roleTitle, companyBrief, researchBusy, researchError, peopleResearchEnabled, peopleResult, peopleBusy, peopleError, interviewKit, interviewBusy, interviewError, outreachKit, outreachBusy, outreachError, onCompanyNameChange, onRoleTitleChange, onResearch, onResearchPeople, onPrepareInterview, onPrepareOutreach}: Props) {
   const targetLabel = [companyName.trim(), roleTitle.trim()].filter(Boolean).join(' · ') || 'Current application';
   const [openSections, setOpenSections] = useState(() => ({company: !companyBrief, target: !companyName.trim(), interview: !interviewKit, outreach: outreachBusy || Boolean(outreachKit)}));
   const setSectionOpen = (section: keyof typeof openSections, open: boolean) => setOpenSections(current => ({...current, [section]: open}));
@@ -55,6 +61,7 @@ export function ApplicationKit({companyName, roleTitle, companyBrief, researchBu
           <button className="focus-ring mt-3 flex min-h-10 w-full items-center justify-center gap-2 bg-white px-3 py-2.5 text-xs font-semibold text-black disabled:opacity-30" disabled={researchBusy || !companyName.trim()} onClick={onResearch}>{researchBusy ? <><LoaderCircle className="animate-spin" size={14} />Researching with Google…</> : <><Search size={14} />{companyBrief ? 'Refresh company research' : 'Research company'}</>}</button>
           {researchError && <p className="mt-3 text-xs leading-5 text-amber-300" role="status">{researchError}</p>}
           {companyBrief && <CompanyBrief brief={companyBrief} />}
+          {peopleResearchEnabled && companyBrief && <PublicTeamResearch brief={companyBrief} result={peopleResult} busy={peopleBusy} error={peopleError} onResearch={onResearchPeople} />}
         </div>
       </details>
 
@@ -85,6 +92,24 @@ export function ApplicationKit({companyName, roleTitle, companyBrief, researchBu
       </details>
     </div>
   </section>;
+}
+
+function PublicTeamResearch({brief, result, busy, error, onResearch}: {brief: GroundedCompanyBrief; result: PublicPeopleResult | null; busy: boolean; error: string; onResearch: () => void}) {
+  const sourceHints = officialCompanySources(brief);
+  return <section className="mt-4 border border-white/10 bg-white/[.025] p-3" aria-labelledby="public-team-title">
+    <div className="flex items-start gap-2.5"><span className="grid h-7 w-7 shrink-0 place-items-center border border-white/15 text-neutral-300"><UsersRound size={13} /></span><div><p className="font-mono text-[8px] uppercase tracking-[.14em] text-neutral-600">Experimental · official pages only</p><h4 id="public-team-title" className="mt-1 text-xs font-semibold text-neutral-200">Publicly listed team members</h4><p className="mt-1 text-[11px] leading-4 text-neutral-500">Searches company-owned pages for published names and roles. It never looks for personal profiles, emails, or phone numbers.</p></div></div>
+    <button className="focus-ring mt-3 flex min-h-10 w-full items-center justify-center gap-2 border border-white/15 px-3 py-2.5 text-xs font-semibold text-neutral-200 hover:border-white/30 hover:text-white disabled:opacity-30" disabled={busy || sourceHints.length === 0} onClick={onResearch}>{busy ? <><LoaderCircle className="animate-spin" size={14} />Searching official pages…</> : <><Search size={14} />{result ? 'Refresh publicly listed team members' : 'Find publicly listed team members'}</>}</button>
+    {sourceHints.length === 0 && <p className="mt-2 text-[10px] leading-4 text-neutral-600">A verified official company source is required before this experiment can run.</p>}
+    {error && <p className="mt-3 text-xs leading-5 text-amber-300" role="status">{error}</p>}
+    {result && result.people.length === 0 && <p className="mt-3 text-xs leading-5 text-neutral-400" role="status">No publicly listed team members were found on official company pages.</p>}
+    {result && result.people.length > 0 && <ul className="mt-3 divide-y divide-white/10 border-y border-white/10">{result.people.map(person => <li key={`${person.category}-${person.name}`} className="py-3"><p className="text-xs font-semibold text-neutral-200">{person.name} <ClaimCitations ids={person.citationIds} sources={result.sources} /></p><p className="mt-0.5 text-[11px] leading-4 text-neutral-400">{person.role}</p><p className="mt-1 font-mono text-[8px] uppercase tracking-wider text-neutral-600">{peopleCategoryLabel(person.category)}</p></li>)}</ul>}
+  </section>;
+}
+
+function peopleCategoryLabel(category: PublicPeopleResult['people'][number]['category']): string {
+  if (category === 'recruiter') return 'Recruiter or talent';
+  if (category === 'hiring-manager') return 'Hiring leadership';
+  return 'Potential team peer';
 }
 
 function CompanyBrief({brief}: {brief: GroundedCompanyBrief}) {

@@ -19,9 +19,9 @@ Cloud AI is the recommended fast analysis path and Gemma remains an optional on-
 - The server accepts fixed operation envelopes, constructs prompts itself, and enforces body, token, timeout, retry, per-client, and daily limits.
 - Cloud failure returns an actionable error; fictional fixtures remain test-only.
 - Conversational follow-ups about fit, matches, gaps, and pending edits are reconstructed from the already validated analysis in the browser. They do not send conversation history or consume another provider request.
-- Research inputs are bounded as untrusted data. Each displayed company claim must retain at least one non-social HTTP(S) citation from grounding metadata.
+- Research inputs are bounded as untrusted data. Each displayed company claim must retain at least one non-social HTTP(S) citation from grounding metadata. Experimental public-team results additionally require a first-party company citation for the published name and role; email addresses, phone numbers, social profiles, and inferred employment are rejected.
 - Interview model prose is not trusted as a candidate pitch. The application rebuilds the pitch from exact fields selected by validated evidence IDs.
-- Outreach messages for recruiter, hiring-manager, peer, and follow-up scenarios use deterministic local templates and consume no model quota. Contact strategy never discovers named employees or infers contact details.
+- Outreach messages for recruiter, hiring-manager, peer, and follow-up scenarios use deterministic local templates and consume no model quota. Experimental public-team results are display-only and never personalize those drafts or infer contact details.
 
 ## Input envelope
 

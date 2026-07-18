@@ -57,7 +57,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - AI never silently changes CV state.
 - Company research never receives CV content, starts only after a user action, and shows citations attached to individual claims.
 - Interview pitches are reconstructed from cited CV fields before display; outreach drafts are deterministic local templates.
-- Contact strategy recommends professional roles to approach and may link to official company channels, but never discovers named employees, personal profiles, or inferred contact details.
+- Contact strategy recommends professional roles and official company channels. A disabled-by-default experiment may separately surface names and roles explicitly published on first-party company pages; it never uses personal profiles or inferred contact details.
 - Changing CV or job inputs invalidates dependent generated results.
 - AI design output is schema-validated and changes presentation only after explicit acceptance.
 - PDF/print output is legible, removes editor chrome, and avoids obvious section clipping.
@@ -78,4 +78,4 @@ The presenter opens a prepared local draft, pastes a job posting, consents to cl
 - Payments or subscriptions
 - Collaborative editing
 - User-authored, generated, or marketplace templates
-- Employee discovery, personal-profile aggregation, or inferred contact details
+- General employee discovery, personal-profile aggregation, or inferred contact details. The only exception is the reversible, disabled-by-default first-party public-team experiment described above.

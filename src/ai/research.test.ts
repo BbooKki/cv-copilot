@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, isExcludedSource, officialCompanyChannels, parseCompanyBrief} from './research';
+import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, isExcludedSource, isLikelyOfficialCompanySource, officialCompanyChannels, officialCompanySources, parseCompanyBrief} from './research';
 
 describe('company research', () => {
   it('builds a prompt that forbids people/social research and includes the role', () => {
@@ -95,6 +95,22 @@ describe('company research', () => {
     };
 
     expect(officialCompanyChannels(brief)).toEqual(brief.sources);
+  });
+
+  it('separates first-party sources from similarly named third-party domains', () => {
+    const brief = {
+      company: 'Meta',
+      summary: {text: 'Meta builds products.', citationIds: ['source-0']},
+      priorities: [],
+      roleContext: null,
+      sources: [
+        {id: 'source-0', title: 'Meta Careers', url: 'https://www.meta.com/careers'},
+        {id: 'source-1', title: 'Metadata directory', url: 'https://metadata.com/meta'},
+      ],
+    };
+
+    expect(officialCompanySources(brief)).toEqual([brief.sources[0]]);
+    expect(isLikelyOfficialCompanySource(brief.sources[1], 'Meta')).toBe(false);
   });
 });
 

@@ -13,7 +13,7 @@ export const companyResearchInputSchema = z.object({
 
 export type CompanyResearchInput = z.infer<typeof companyResearchInputSchema>;
 
-const sourceSchema = z.object({
+export const researchSourceSchema = z.object({
   id: z.string().trim().min(1).max(80),
   title: z.string().trim().min(1).max(200),
   url: z.string().trim().url().refine(value => {
@@ -36,11 +36,11 @@ export const groundedCompanyBriefSchema = z.object({
   summary: citedClaimSchema,
   priorities: z.array(citedClaimSchema.extend({text: z.string().min(1).max(240)})).max(5),
   roleContext: citedClaimSchema.nullable(),
-  sources: z.array(sourceSchema).min(1).max(8),
+  sources: z.array(researchSourceSchema).min(1).max(8),
 }).strict();
 
 export type GroundedCompanyBrief = z.infer<typeof groundedCompanyBriefSchema>;
-export type ResearchSource = z.infer<typeof sourceSchema>;
+export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchGroundingSupport = {startIndex: number; endIndex: number; text: string; sourceIds: string[]};
 
 /** Social, personal-profile, forum, review, and job-aggregator sources are excluded. */
@@ -104,30 +104,45 @@ export function parseCompanyBrief(rawText: string, sources: ResearchSource[], su
 
 const OFFICIAL_CHANNEL_PATTERN = /\b(careers?|jobs?|join(?:[-\s]?us)?|hiring|talent|contact|teams?|about)\b/i;
 
+/** Conservatively identifies a first-party company result from its URL or grounding title. */
+export function isLikelyOfficialCompanySource(source: ResearchSource, company: string): boolean {
+  if (isExcludedSource(source)) return false;
+  const companyTokens = company.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(token => token.length >= 2 && !['company', 'corp', 'corporation', 'inc', 'ltd', 'limited', 'llc', 'group'].includes(token));
+  if (companyTokens.length === 0) return false;
+  let host = '';
+  try { host = new URL(source.url).hostname.toLowerCase(); } catch { return false; }
+  const title = source.title.toLowerCase();
+  const hostLabels = host.split(/[.-]/).filter(Boolean);
+  const hostMatches = companyTokens.some(token => token.length >= 3 && hostLabels.some(label => label === token));
+  const titleMatches = companyTokens.some(token => title.includes(token));
+  const titleLooksLikeDomain = /(?:^|\s)[a-z0-9-]+(?:\.[a-z0-9-]+)+(?=$|\s)/i.test(title);
+  const isGroundingRedirect = host.includes('google.com') || host.includes('googleusercontent.com');
+  const hasNonLatinCompanyName = /[^\x00-\x7f]/.test(company);
+  const nonLatinTitleMatch = hasNonLatinCompanyName && titleMatches && (title.trim() === company.trim().toLowerCase() || OFFICIAL_CHANNEL_PATTERN.test(`${title} ${new URL(source.url).pathname}`));
+  return hostMatches || nonLatinTitleMatch || (isGroundingRedirect && titleMatches && titleLooksLikeDomain);
+}
+
 /** Returns likely official hiring/team/contact pages without extracting people. */
 export function officialCompanyChannels(brief: GroundedCompanyBrief): ResearchSource[] {
-  const companyTokens = brief.company.toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 3);
   return brief.sources.filter(source => {
-    if (isExcludedSource(source)) return false;
-    let host = '';
     let path = '';
     try {
       const url = new URL(source.url);
-      host = url.hostname.toLowerCase();
       path = url.pathname.toLowerCase();
     } catch {
       return false;
     }
     const label = `${source.title.toLowerCase()} ${path}`;
-    const normalizedTitle = source.title.toLowerCase();
-    const looksRelevant = companyTokens.some(token => host.includes(token) || normalizedTitle.includes(token));
-    const looksLikeFirstPartyDomain = /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalizedTitle)
-      && companyTokens.some(token => normalizedTitle.includes(token));
-    return looksRelevant && (OFFICIAL_CHANNEL_PATTERN.test(label) || looksLikeFirstPartyDomain);
+    return isLikelyOfficialCompanySource(source, brief.company) && (OFFICIAL_CHANNEL_PATTERN.test(label) || /(?:^|\s)[a-z0-9-]+(?:\.[a-z0-9-]+)+(?=$|\s)/i.test(source.title));
   }).slice(0, 4);
 }
 
-function citationsForClaim(rawText: string, claim: string, supports: ResearchGroundingSupport[]): string[] {
+/** Returns first-party sources that may safely seed the opt-in public-team experiment. */
+export function officialCompanySources(brief: GroundedCompanyBrief): ResearchSource[] {
+  return brief.sources.filter(source => isLikelyOfficialCompanySource(source, brief.company)).slice(0, 4);
+}
+
+export function citationsForClaim(rawText: string, claim: string, supports: ResearchGroundingSupport[]): string[] {
   const escaped = JSON.stringify(claim).slice(1, -1);
   const literalStart = rawText.indexOf(claim);
   const escapedStart = rawText.indexOf(escaped);

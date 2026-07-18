@@ -5,6 +5,7 @@ import {testCv} from '../cv/testFixture';
 
 const originalEnabled = process.env.CLOUD_AI_ENABLED;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
+const originalPeopleResearchEnabled = process.env.PEOPLE_RESEARCH_ENABLED;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -13,6 +14,8 @@ afterEach(() => {
   else process.env.CLOUD_AI_ENABLED = originalEnabled;
   if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
   else process.env.GEMINI_API_KEY = originalGeminiKey;
+  if (originalPeopleResearchEnabled === undefined) delete process.env.PEOPLE_RESEARCH_ENABLED;
+  else process.env.PEOPLE_RESEARCH_ENABLED = originalPeopleResearchEnabled;
 });
 
 describe('/api/ai safeguards', () => {
@@ -140,6 +143,39 @@ describe('/api/ai safeguards', () => {
       warnings: ['Fit analysis is ready, but no grounded CV edit could be generated.'],
     });
   });
+
+  it('blocks public-team research before provider access when its kill switch is off', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.PEOPLE_RESEARCH_ENABLED = 'false';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(peopleResearchBody(), 'people-disabled-client'), response.value);
+
+    expect(response.status()).toBe(404);
+    expect(response.body()).toMatch(/not enabled/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns only cited public people from an official company source when enabled', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.PEOPLE_RESEARCH_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    const text = 'PERSON_MANAGER: Jane Doe | Engineering Director';
+    const fetchMock = vi.fn().mockResolvedValue(groundedGeminiResponse(text, 'Acme Team', 'https://acme.com/team'));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(peopleResearchBody(), 'people-enabled-client'), response.value);
+
+    expect(response.status()).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(response.body())).toMatchObject({
+      company: 'Acme',
+      people: [{name: 'Jane Doe', role: 'Engineering Director', category: 'hiring-manager', citationIds: ['source-0']}],
+    });
+  });
 });
 
 function analyzeBody(): string {
@@ -154,8 +190,31 @@ function analyzeBody(): string {
   });
 }
 
+function peopleResearchBody(): string {
+  return JSON.stringify({
+    operation: 'research-people',
+    input: {
+      company: 'Acme',
+      role: 'Frontend Engineer',
+      officialSources: [{id: 'brief-source', title: 'Acme Careers', url: 'https://acme.com/careers'}],
+    },
+  });
+}
+
 function geminiResponse(text: string): Response {
   return new Response(JSON.stringify({candidates: [{content: {parts: [{text}]}}]}), {status: 200, headers: {'content-type': 'application/json'}});
+}
+
+function groundedGeminiResponse(text: string, title: string, url: string): Response {
+  const claim = text.slice(text.indexOf(':') + 1).trim();
+  const startIndex = text.indexOf(claim);
+  return new Response(JSON.stringify({candidates: [{
+    content: {parts: [{text}]},
+    groundingMetadata: {
+      groundingChunks: [{web: {uri: url, title}}],
+      groundingSupports: [{segment: {startIndex, endIndex: startIndex + claim.length, text: claim}, groundingChunkIndices: [0]}],
+    },
+  }]}), {status: 200, headers: {'content-type': 'application/json'}});
 }
 
 function requestDouble(body: string, address: string): IncomingMessage {

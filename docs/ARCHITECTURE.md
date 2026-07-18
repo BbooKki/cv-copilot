@@ -24,7 +24,7 @@ The browser owns canonical CV state, template rendering, local persistence, sugg
 
 ### Cloud AI function
 
-The function accepts only fixed, schema-validated operations. Analysis and interview requests use compact CV facts after contact redaction; research accepts only public company, role, and job data. It owns the provider key, request timeouts, output ceilings, retries, rate limits, a daily budget, and an emergency switch. Outreach emails are generated deterministically in the browser and never consume provider quota.
+The function accepts only fixed, schema-validated operations. Analysis and interview requests use compact CV facts after contact redaction; research accepts only public company, role, job, and previously validated official-source data. The experimental public-team operation has an independent disabled-by-default server switch and returns only cited names and roles from first-party pages. It owns the provider key, request timeouts, output ceilings, retries, rate limits, a daily budget, and an emergency switch. Outreach emails are generated deterministically in the browser and never consume provider quota.
 
 ### Gemma worker
 
@@ -87,7 +87,7 @@ src/
 5. For cloud analysis, obtain consent, redact contact fields, compact facts, and send a fixed operation to `/api/ai`; Private Mode uses the bounded worker protocol.
 6. Parse and validate structured output, reject stale or ungrounded suggestions, and never substitute fictional production results on failure.
 7. Apply only user-approved suggestion patches.
-8. On explicit request, research company-and-role data with Google grounding and preserve claim-level citation mappings.
+8. On explicit request, research company-and-role data with Google grounding and preserve claim-level citation mappings. When both experimental flags are enabled, a second explicit action may search validated first-party sources for cited public names and roles without changing outreach drafts.
 9. Reconstruct interview pitches deterministically from cited CV IDs and generate outreach templates locally.
 10. Direct preview edits use a closed field-target union and the normal undo/persistence path.
 

@@ -43,6 +43,11 @@
 - Employee discovery or contact inference
 - Cover-letter generation
 
+## Post-MVP experimental exception
+
+- A disabled-by-default, user-triggered public-team experiment may return up to five names and roles only when each is cited to a first-party company page.
+- It excludes personal profiles and all inferred contact details, remains separate from Company brief and outreach generation, and can be disabled immediately with its server feature flag.
+
 ## Suggested schedule
 
 | Hours | Outcome |

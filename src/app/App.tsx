@@ -7,7 +7,10 @@ import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFit
 import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument, validateSuggestionTarget} from '../ai/suggestions';
 import {analyzeWithCloud} from '../ai/cloudClient';
 import {researchCompany} from '../ai/researchClient';
-import type {GroundedCompanyBrief} from '../ai/research';
+import {officialCompanySources, type GroundedCompanyBrief} from '../ai/research';
+import {researchPublicPeople} from '../ai/peopleResearchClient';
+import type {PublicPeopleResult} from '../ai/peopleResearch';
+import {PUBLIC_PEOPLE_RESEARCH_ENABLED} from '../ai/peopleResearchConfig';
 import {buildInterviewKit} from '../ai/interviewClient';
 import {assertInterviewKitGrounded, type InterviewKit} from '../ai/interview';
 import {buildOutreachKit} from '../ai/outreachClient';
@@ -106,6 +109,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const [companyBrief, setCompanyBrief] = useState<GroundedCompanyBrief | null>(null);
   const [researchBusy, setResearchBusy] = useState(false);
   const [researchError, setResearchError] = useState('');
+  const [peopleResult, setPeopleResult] = useState<PublicPeopleResult | null>(null);
+  const [peopleBusy, setPeopleBusy] = useState(false);
+  const [peopleError, setPeopleError] = useState('');
   const [interviewKit, setInterviewKit] = useState<InterviewKit | null>(null);
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [interviewError, setInterviewError] = useState('');
@@ -259,6 +265,8 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     clearCvDerivedResults();
     setCompanyBrief(null);
     setResearchError('');
+    setPeopleResult(null);
+    setPeopleError('');
   }, [clearCvDerivedResults]);
 
   const updateDocument = useCallback((next: CvDocument, preserveAnalysis = false) => {
@@ -351,6 +359,8 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     setResearchBusy(true);
     setResearchError('');
     setCompanyBrief(null);
+    setPeopleResult(null);
+    setPeopleError('');
     try {
       const brief = await researchCompany({
         company,
@@ -364,6 +374,27 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       setResearchBusy(false);
     }
   }, [companyName, roleTitle, jobText]);
+
+  const runPeopleResearch = useCallback(async () => {
+    if (!PUBLIC_PEOPLE_RESEARCH_ENABLED || !companyBrief) return;
+    const officialSources = officialCompanySources(companyBrief);
+    if (officialSources.length === 0) { setPeopleError('A verified official company source is required before searching for publicly listed team members.'); return; }
+    setPeopleBusy(true);
+    setPeopleError('');
+    setPeopleResult(null);
+    try {
+      const result = await researchPublicPeople({
+        company: companyBrief.company,
+        role: roleTitle.trim() || undefined,
+        officialSources,
+      });
+      setPeopleResult(result);
+    } catch (cause) {
+      setPeopleError(cause instanceof Error ? cause.message : 'Public team research failed. The company brief is still available.');
+    } finally {
+      setPeopleBusy(false);
+    }
+  }, [companyBrief, roleTitle]);
 
   const runInterviewKit = useCallback(async () => {
     setInterviewBusy(true);
@@ -646,15 +677,20 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             companyBrief={companyBrief}
             researchBusy={researchBusy}
             researchError={researchError}
+            peopleResearchEnabled={PUBLIC_PEOPLE_RESEARCH_ENABLED}
+            peopleResult={peopleResult}
+            peopleBusy={peopleBusy}
+            peopleError={peopleError}
             interviewKit={interviewKit}
             interviewBusy={interviewBusy}
             interviewError={interviewError}
             outreachKit={outreachKit}
             outreachBusy={outreachBusy}
             outreachError={outreachError}
-            onCompanyNameChange={value => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setCompanyName(value); }}
-            onRoleTitleChange={value => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setRoleTitle(value); }}
+            onCompanyNameChange={value => { setCompanyBrief(null); setPeopleResult(null); setPeopleError(''); setInterviewKit(null); setOutreachKit(null); setCompanyName(value); }}
+            onRoleTitleChange={value => { setCompanyBrief(null); setPeopleResult(null); setPeopleError(''); setInterviewKit(null); setOutreachKit(null); setRoleTitle(value); }}
             onResearch={() => void runResearch()}
+            onResearchPeople={() => void runPeopleResearch()}
             onPrepareInterview={requestInterviewKit}
             onPrepareOutreach={requestOutreachKit}
           />}

@@ -41,6 +41,8 @@ Useful checks are `npm run typecheck`, `npm test`, and `npm run build`. The Gemm
 
 For local Gemma verification, use `npm run build` followed by `npm run preview`, then test in a WebGPU-enabled Chrome or Edge browser. The production build emits the classic worker required by LiteRT's WASM loader; ordinary UI development can still use `npm run dev`. Test the final deployed HTTPS origin separately before presenting.
 
+The public-team search is an experimental, first-party-only feature and is disabled by default. For local evaluation, set both `VITE_PEOPLE_RESEARCH_ENABLED=true` and `PEOPLE_RESEARCH_ENABLED=true`. The first flag exposes the button; the second is the independent server kill switch. Never enable only the browser flag in production, and keep both false to restore the stable Company brief flow.
+
 LiteRT may log an unavailable NPU, `No Winograd`, or mel-filterbank warnings while successfully registering WebGPU. Treat the UI's runtime phase and error message as the source of truth. If structured output fails, expand **Show raw model output**; generation request IDs prevent an older cancelled response from contaminating its retry.
 
 ## Cloud schema

@@ -4,6 +4,7 @@ import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisRequest, type AiAnalysisResult, type AiFitAnalysisResult, type AiSuggestionResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
+import {buildPeopleResearchPrompt, buildPeopleResearchRetryPrompt, parsePublicPeople, peopleResearchInputSchema, type PeopleResearchInput, type PublicPeopleResult} from '../src/ai/peopleResearch.js';
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
 import {assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
@@ -17,6 +18,7 @@ export const config = {maxDuration: 60};
 const ANALYSIS_MAX_TOKENS = 900;
 const ANALYSIS_REPAIR_MAX_TOKENS = 520;
 const RESEARCH_MAX_TOKENS = 1_600;
+const PEOPLE_RESEARCH_MAX_TOKENS = 900;
 const INTERVIEW_MAX_TOKENS = 1_800;
 
 const jobSchema = z.object({
@@ -48,6 +50,7 @@ const interviewKitRequestSchema = z.object({
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
   z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
+  z.object({operation: z.literal('research-people'), input: peopleResearchInputSchema}).strict(),
   z.object({operation: z.literal('build-interview-kit'), request: interviewKitRequestSchema}).strict(),
 ]);
 
@@ -88,6 +91,11 @@ export default async function handler(request: IncomingMessage, response: Server
   try {
     const body = bodySchema.parse(JSON.parse(await readRequest(request, MAX_BODY_BYTES)));
     operation = body.operation;
+    if (body.operation === 'research-people' && process.env.PEOPLE_RESEARCH_ENABLED !== 'true') {
+      response.statusCode = 404;
+      response.end(JSON.stringify({error: 'Public team research is not enabled.', code: 'not-enabled', requestId}));
+      return;
+    }
     const budgetError = consumeGlobalQuota();
     if (budgetError) {
       response.statusCode = 429;
@@ -105,6 +113,12 @@ export default async function handler(request: IncomingMessage, response: Server
       const brief = await research(body.input);
       response.statusCode = 200;
       response.end(JSON.stringify(brief));
+      return;
+    }
+    if (body.operation === 'research-people') {
+      const result = await researchPeople(body.input);
+      response.statusCode = 200;
+      response.end(JSON.stringify(result));
       return;
     }
     if (body.operation === 'build-interview-kit') {
@@ -203,6 +217,18 @@ async function research(input: CompanyResearchInput): Promise<GroundedCompanyBri
     } catch (cause) {
       throw new GeminiError('invalid-output', cause instanceof Error ? cause.message : 'No usable company research was found.', 422);
     }
+  }
+}
+
+async function researchPeople(input: PeopleResearchInput): Promise<PublicPeopleResult> {
+  const first = await generateGrounded(buildPeopleResearchPrompt(input), {temperature: 0.1, maxOutputTokens: PEOPLE_RESEARCH_MAX_TOKENS});
+  try {
+    const result = parsePublicPeople(first.text, first.sources, first.supports, input);
+    if (result.people.length === 0 && /PERSON_(?:RECRUITER|MANAGER|PEER):/i.test(first.text)) throw new Error('The returned people were not tied to official company sources.');
+    return result;
+  } catch {
+    const retry = await generateGrounded(buildPeopleResearchRetryPrompt(input), {temperature: 0, maxOutputTokens: PEOPLE_RESEARCH_MAX_TOKENS});
+    return parsePublicPeople(retry.text, retry.sources, retry.supports, input);
   }
 }
 
