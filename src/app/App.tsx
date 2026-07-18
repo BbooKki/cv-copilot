@@ -113,6 +113,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const [activeStage, setActiveStage] = useState<GenerationStage>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const saveTimer = useRef<number | null>(null);
+  const tailorEndRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<GenerationStage>(null);
   const analysisRequestRef = useRef<AiAnalysisRequest | null>(null);
   const pendingCloudRequestRef = useRef<{text: string; meta: typeof jobMeta} | null>(null);
@@ -140,6 +141,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
         assertFitEvidenceExists(request.cv, fit);
         fitAnalysisRef.current = fit;
         setAnalysis({...fit, suggestions: []});
+        setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: fit.fitSummary}]);
         setHandledSuggestions({});
         setAnalysisError('');
         setInvalidAnalysisOutput(null);
@@ -307,6 +309,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       assertFitEvidenceExists(document, result);
       assertSuggestionsAreGrounded(document, result.suggestions);
       setAnalysis(result);
+      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: result.fitSummary}]);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Cloud analysis failed.';
       setAnalysis(null);
@@ -493,6 +496,10 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? `Analyzing job fit · ${generationPhaseLabel} · ${elapsedLabel}` : activeStage === 'suggestions' && gemma.status === 'generating' ? `Preparing grounded edit · ${generationPhaseLabel} · ${elapsedLabel}` : 'Analyze locally';
   const hasInsufficientStorage = !gemma.cached && gemma.capability.storageAvailable !== null && gemma.capability.storageAvailable < GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES;
 
+  useEffect(() => {
+    tailorEndRef.current?.scrollIntoView?.({behavior: 'smooth', block: 'nearest'});
+  }, [activeStage, analysis, analysisError, cloudBusy, extracting, showConsent, tailorMessages.length]);
+
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 md:px-6">
@@ -502,6 +509,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
             <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-30" disabled={!cvHasContent} onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
           </div>
+          <button aria-label="Export PDF" className="focus-ring grid h-10 w-10 place-items-center border border-white/15 text-neutral-300 disabled:opacity-30 md:hidden" disabled={!cvHasContent} onClick={() => window.print()}><Download size={16} /></button>
           <AccountMenu onOpenAccount={onOpenAccount} />
         </div>
       </div>
@@ -533,67 +541,72 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           </section>
           <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
           <CvEditor document={document} onChange={updateDocument} />
-        </div> : <div className="space-y-4 p-4 md:p-5">
-          <section className="border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
-              <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${cloudBusy || extracting || gemma.status === 'generating' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-500">{aiMode === 'cloud' ? 'Cloud copilot' : 'Private copilot'}</span></div>
-              <div className="flex border border-white/10 p-0.5" role="tablist" aria-label="AI engine">
-                <button role="tab" aria-label="Cloud" aria-selected={aiMode === 'cloud'} className={`focus-ring px-2.5 py-1.5 text-[10px] ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={12} className="mr-1 inline" />Cloud</button>
-                <button role="tab" aria-label="Private · Local" aria-selected={aiMode === 'local'} className={`focus-ring px-2.5 py-1.5 text-[10px] ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={12} className="mr-1 inline" />Private</button>
+          <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
+        </div> : <div className="p-4 md:p-5">
+          <section className="overflow-hidden border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[.02] px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${cloudBusy || extracting || gemma.status === 'generating' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><h3 className="text-sm font-semibold">Tailor conversation</h3></div>
+                <p className="mt-1 pl-4 font-mono text-[8px] uppercase tracking-[.14em] text-neutral-600">{aiMode === 'cloud' ? 'Fast analysis · contact details removed' : 'Private analysis · stays on this device'}</p>
+              </div>
+              <div className="flex rounded-full border border-white/10 bg-black p-0.5" role="tablist" aria-label="AI engine">
+                <button role="tab" aria-label="Cloud" aria-selected={aiMode === 'cloud'} className={`focus-ring rounded-full px-3 py-1.5 text-[10px] ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={12} className="mr-1 inline" />Cloud</button>
+                <button role="tab" aria-label="Private · Local" aria-selected={aiMode === 'local'} className={`focus-ring rounded-full px-3 py-1.5 text-[10px] ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={12} className="mr-1 inline" />Private</button>
               </div>
             </div>
 
-            <div className="max-h-[420px] space-y-4 overflow-y-auto px-3 py-4" aria-live="polite">
-              <ChatBubble role="assistant">Send me a job URL or paste the description. After the comparison, keep chatting to ask about your fit, honest gaps, or the edits I suggest.</ChatBubble>
+            <div className="max-h-[min(56vh,620px)] min-h-[320px] space-y-4 overflow-y-auto px-4 py-5 lg:h-[clamp(200px,calc(100vh-480px),620px)] lg:min-h-0" aria-live="polite">
+              <ChatBubble role="assistant">Share the job link or paste the description here. I’ll compare it with your CV, explain the fit, and let you approve every edit.</ChatBubble>
               {jobText && !tailorMessages.some(message => message.role === 'user') && <ChatBubble role="user">{jobMeta.title ? `${jobMeta.title}${jobMeta.company ? ` · ${jobMeta.company}` : ''}` : compactJobMessage(jobText)}</ChatBubble>}
               {tailorMessages.map(message => <ChatBubble key={message.id} role={message.role}>{message.text}</ChatBubble>)}
               {extracting && <ChatStatus>Reading and sanitizing the job page…</ChatStatus>}
-              {cloudBusy && <ChatStatus>Comparing the job with your CV and checking every proposed edit…</ChatStatus>}
+              {cloudBusy && <ChatStatus>Comparing the role with your CV and validating each edit…</ChatStatus>}
               {gemma.status === 'generating' && activeStage && activeStage !== 'design' && <ChatStatus>{analysisActionLabel}</ChatStatus>}
-              {analysis && <ChatBubble role="assistant">{analysis.fitSummary} Ask “What are my gaps?” or review the evidence-backed edits below.</ChatBubble>}
+
+              {showConsent && <AssistantAction title="Before I send this" icon={<WandSparkles size={13} />}>
+                <p>Your work history and the job description go to the cloud AI provider. Your name and contact details are removed first.</p>
+                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); setAiMode('local'); }}>Keep it private</button></div>
+              </AssistantAction>}
+
+              {aiMode === 'cloud' && !analysis && jobText.trim().length >= 40 && !cloudBusy && <AssistantAction title="Ready to compare" icon={<WandSparkles size={13} />}>
+                <p>I have the job description. Start the comparison when you’re ready.</p>
+                <button className="focus-ring mt-3 inline-flex items-center gap-2 bg-white px-3 py-2.5 text-xs font-semibold text-black disabled:opacity-30" disabled={!cvHasContent} onClick={() => requestCloudAnalysis()}><WandSparkles size={14} />Analyze CV</button>
+                {!cvHasContent && <p className="mt-2 text-[10px] text-neutral-600">Add some CV content first so I have evidence to compare.</p>}
+              </AssistantAction>}
+
+              {aiMode === 'local' && <AssistantAction title="Private mode" icon={<HardDrive size={13} />}>
+                <p>{gemma.status === 'ready' ? 'The local model is ready. Nothing in this comparison leaves your device.' : `This mode uses a one-time ${formatBytes(GEMMA_MODEL_BYTES)} model download and WebGPU.`}</p>
+                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring inline-flex items-center gap-2 bg-white px-3 py-2.5 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring inline-flex items-center gap-2 border border-white/15 px-3 py-2.5 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring inline-flex items-center gap-2 border border-white/15 px-3 py-2.5 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop</button>}</div>
+                {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-3"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div><button className="mt-2 text-[10px] text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
+                {gemma.status === 'generating' && <p className="mt-3 font-mono text-[9px] uppercase tracking-wider text-neutral-600">{generationPhaseLabel} · {gemma.generatedCharacters} chars local</p>}
+                {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
+                {hasInsufficientStorage && <p className="mt-3 text-xs leading-5 text-amber-300">Free at least {formatBytes(GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES)} in browser storage before downloading.</p>}
+                {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Private mode needs WebGPU in Chrome or Edge over HTTPS.</p>}
+                {gemma.cached && <button className="mt-3 text-[10px] text-neutral-600 hover:text-red-400 disabled:opacity-30" disabled={['downloading', 'initializing', 'generating'].includes(gemma.status)} onClick={gemma.clearCache}>Remove cached model</button>}
+              </AssistantAction>}
+
+              {analysisError && <ChatAlert tone="error">{analysisError}</ChatAlert>}
+              {analysisNotice && <ChatAlert tone="warning">{analysisNotice}</ChatAlert>}
+              {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
+              {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={reject} />}
+              <div ref={tailorEndRef} />
             </div>
 
-            {analysis && <div className="flex flex-wrap gap-2 border-t border-white/10 px-3 py-2.5">
-              {['What are my strongest matches?', 'What are my gaps?', 'Which edit should I review first?'].map(prompt => <button key={prompt} className="focus-ring border border-white/10 px-2.5 py-1.5 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={() => submitTailorMessage(prompt)}>{prompt}</button>)}
+            {analysis && <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-3">
+              {['What are my strongest matches?', 'What are my gaps?', 'Which edit should I review first?'].map(prompt => <button key={prompt} className="focus-ring shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={() => submitTailorMessage(prompt)}>{prompt}</button>)}
             </div>}
 
-            <div className="border-t border-white/10 p-3">
+            <div className="border-t border-white/10 bg-black/60 p-3">
               <label className="sr-only" htmlFor="tailor-message">Message CV Copilot</label>
-              <div className="flex items-end gap-2 rounded-sm border border-white/15 bg-black p-2 focus-within:border-white/40">
-                <textarea id="tailor-message" rows={2} className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-5 text-neutral-200 outline-none" placeholder={analysis ? 'Ask about your fit, gaps, or suggested edits…' : 'Paste a job URL or job description…'} value={tailorInput} onChange={event => setTailorInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitTailorMessage(); } }} />
-                <button aria-label="Send message" className="focus-ring grid h-9 w-9 shrink-0 place-items-center bg-white text-black disabled:opacity-30" disabled={!tailorInput.trim() || cloudBusy || extracting} onClick={() => submitTailorMessage()}><Send size={15} /></button>
+              <div className="flex items-end gap-2 rounded-md border border-white/15 bg-white/[.025] p-2 focus-within:border-white/40">
+                <textarea id="tailor-message" rows={2} className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-5 text-neutral-200 outline-none" placeholder={analysis ? 'Ask about your fit, gaps, or suggested edits…' : 'Paste a job link or job description…'} value={tailorInput} onChange={event => setTailorInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitTailorMessage(); } }} />
+                <button aria-label="Send message" className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-sm bg-white text-black disabled:opacity-30" disabled={!tailorInput.trim() || cloudBusy || extracting} onClick={() => submitTailorMessage()}><Send size={15} /></button>
               </div>
-              <p className="mt-2 font-mono text-[8px] uppercase tracking-wider text-neutral-700">Enter to send · Shift+Enter for a new line · AI edits always need approval</p>
+              <div className="mt-2 flex items-center justify-between gap-3"><p className="font-mono text-[8px] uppercase tracking-wider text-neutral-700">Enter to send · AI edits need approval</p><details className="text-right text-[10px] text-neutral-600"><summary className="focus-ring cursor-pointer select-none hover:text-white">Job details</summary><div className="mt-3 w-[min(420px,calc(100vw-64px))] text-left"><label className="font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-xs outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={14} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-3 block font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={5} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-xs leading-5 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></div></details></div>
             </div>
-
-            <details className="border-t border-white/10 px-3 py-2.5 text-xs text-neutral-500">
-              <summary className="focus-ring cursor-pointer select-none hover:text-white">Edit job details manually</summary>
-              <div className="mt-3"><label className="font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={15} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={6} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></div>
-            </details>
           </section>
 
-          {aiMode === 'cloud' ? <section className="border border-white/10 bg-white/[.02] p-4">
-            <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">Cloud AI</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">Recommended</p></div><span className={`mt-1 h-2 w-2 rounded-full ${cloudBusy ? 'bg-amber-400' : 'bg-emerald-400'}`} /></div>
-            <p className="mt-3 text-xs leading-5 text-neutral-500">Your name, email, phone, location, and links are removed before anything is sent. Employment content — roles, dates, achievements — is included so the model can compare it with the role. <button className="text-neutral-300 underline underline-offset-2 hover:text-white" onClick={() => setAiMode('local')}>Use Private local mode instead</button>.</p>
-            {showConsent && <div className="mt-4 border border-amber-400/25 bg-amber-400/5 p-3"><p className="text-xs leading-5 text-amber-100/90">This sends your CV's employment content and the job description to our cloud AI provider, which may use the content to improve its products. Your name and contact details are removed first. Continue?</p><div className="mt-3 flex gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); setAiMode('local'); }}>Switch to Private Mode</button></div></div>}
-            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={cloudBusy || jobText.trim().length < 40 || !cvHasContent} onClick={() => requestCloudAnalysis()}>{cloudBusy ? <><LoaderCircle className="animate-spin" size={14} />Analyzing…</> : <><WandSparkles size={14} />Analyze CV</>}</button>
-            {!cvHasContent && <p className="mt-2 text-[10px] leading-4 text-neutral-600">Add CV content before analysis.</p>}
-          </section> : <section className="border border-white/10 bg-white/[.02] p-4">
-            <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">On-device model</p><p className="mt-1 font-mono text-[9px] uppercase tracking-widest text-neutral-600">{gemma.status.replace('-', ' ')}</p></div><span className={`mt-1 h-2 w-2 rounded-full ${gemma.status === 'ready' ? 'bg-emerald-400' : gemma.status === 'error' ? 'bg-red-400' : 'bg-neutral-700'}`} /></div>
-            <div className="mt-4 space-y-2 border-y border-white/10 py-3 font-mono text-[9px] text-neutral-500"><div className="flex justify-between"><span>DOWNLOAD</span><span>{formatBytes(GEMMA_MODEL_BYTES)}</span></div><div className="flex justify-between"><span>WEBGPU</span><span>{gemma.capability.webGpu ? 'AVAILABLE' : 'UNAVAILABLE'}</span></div><div className="flex justify-between"><span>LOCAL CACHE</span><span>{gemma.cacheVerified ? 'VERIFIED' : gemma.cached ? 'SAVED' : 'EMPTY'}</span></div><div className="flex justify-between"><span>FREE STORAGE</span><span>{gemma.capability.storageAvailable === null ? 'CHECKING' : formatBytes(gemma.capability.storageAvailable)}</span></div></div>
-            {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-4"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div>{gemma.status === 'initializing' && <p className="mt-3 text-[10px] leading-4 text-neutral-600">This can take up to 3 minutes. LiteRT may report an unavailable NPU while continuing normally with WebGPU.</p>}<button className="mt-3 text-xs text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
-            {gemma.error && <p className="mt-3 text-xs leading-5 text-red-400">{gemma.error}</p>}
-            {hasInsufficientStorage && <p className="mt-3 text-xs leading-5 text-amber-300">Free at least {formatBytes(GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES)} in browser storage before downloading the local model.</p>}
-            {gemma.status === 'unsupported' && <p className="mt-3 text-xs leading-5 text-amber-300">Local AI requires a WebGPU-enabled Chrome or Edge browser over HTTPS. The structured editor remains available.</p>}
-            {gemma.status === 'generating' && <div className="mt-3 flex items-center justify-between border border-white/10 bg-black p-3 font-mono text-[9px] uppercase tracking-wider text-neutral-500"><span>{generationPhaseLabel}</span><span>{gemma.generatedCharacters} chars local</span></div>}
-            <div className="mt-4 grid gap-2"><button className="focus-ring flex items-center justify-center gap-2 bg-white px-3 py-3 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring flex items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop generation</button>}{gemma.cached && <button className="focus-ring text-xs text-neutral-600 hover:text-red-400 disabled:opacity-30" disabled={['downloading', 'initializing', 'generating'].includes(gemma.status)} onClick={gemma.clearCache}>Remove cached model</button>}</div>
-          </section>}
-
-          {analysisError && <p className="border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-300">{analysisError}</p>}
-          {analysisNotice && <p className="border border-amber-400/20 bg-amber-400/5 p-3 text-xs leading-5 text-amber-200">{analysisNotice}</p>}
-          {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
-          {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={reject} />}
-          {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">
+          {aiMode === 'cloud' && analysis && <section className="mt-4 border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">
             <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Globe size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Optional · cited</p><h3 id="research-title" className="mt-1 font-semibold">Research the company</h3></div></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Uses Google Search to build a cited briefing on the company and role. Sends only the company, role, and public job text — never your CV or contact details. Individual people and social profiles are excluded.</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -609,7 +622,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
               <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{companyBrief.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
             </div>}
           </section>}
-          {aiMode === 'cloud' && analysis && <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="prepare-title">
+          {aiMode === 'cloud' && analysis && <section className="mt-4 border border-white/10 bg-white/[.02] p-4" aria-labelledby="prepare-title">
             <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Mic size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Prepare · grounded</p><h3 id="prepare-title" className="mt-1 font-semibold">Interview kit</h3></div></div>
             <p className="mt-3 text-xs leading-5 text-neutral-500">Likely questions, smart questions to ask, and a 30-second pitch — drawn only from your CV. The pitch is rejected if it invents anything not in your CV.</p>
             <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={interviewBusy} onClick={requestInterviewKit}>{interviewBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mic size={14} />{interviewKit ? 'Regenerate interview kit' : 'Prepare interview kit'}</>}</button>
@@ -627,12 +640,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
               </div>
             </div>}
           </section>}
-          <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
         </div>}
       </aside>
     </div>
-
-    <div className="no-print fixed bottom-4 right-4 flex gap-2 md:hidden"><button aria-label="Export PDF" disabled={!cvHasContent} className="focus-ring grid h-12 w-12 place-items-center bg-white text-black shadow-2xl disabled:opacity-30" onClick={() => window.print()}><Download size={18} /></button></div>
 
     {editingTarget && <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Edit ${fieldLabel(editingTarget)}`} onClick={closeFieldEditor}>
       <div className="w-full max-w-lg border border-white/15 bg-neutral-950 p-4" onClick={event => event.stopPropagation()}>
@@ -653,13 +663,31 @@ function appRoute(pathname: string): 'landing' | 'workspace' | 'account' | 'pass
 
 function ChatBubble({role, children}: {role: TailorMessage['role']; children: React.ReactNode}) {
   return <div className={`flex items-start gap-2.5 ${role === 'user' ? 'justify-end' : ''}`}>
-    {role === 'assistant' && <div className="grid h-7 w-7 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={13} /></div>}
-    <div className={`min-w-0 max-w-[88%] overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere] border px-3 py-2.5 text-sm leading-5 ${role === 'user' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-white/[.04] text-neutral-300'}`}>{children}</div>
+    {role === 'assistant' && <AssistantAvatar />}
+    <div className={`min-w-0 max-w-[88%] overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere] border px-3.5 py-2.5 text-sm leading-5 ${role === 'user' ? 'rounded-[14px_4px_14px_14px] border-white/20 bg-white text-black' : 'rounded-[4px_14px_14px_14px] border-white/10 bg-white/[.04] text-neutral-300'}`}>{children}</div>
   </div>;
 }
 
 function ChatStatus({children}: {children: React.ReactNode}) {
   return <div className="flex items-center gap-2 pl-9 font-mono text-[9px] uppercase tracking-wider text-neutral-600"><LoaderCircle className="animate-spin" size={12} /><span>{children}</span></div>;
+}
+
+function AssistantAvatar() {
+  return <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/15 bg-white text-black"><Bot size={13} /></div>;
+}
+
+function AssistantAction({title, icon, children}: {title: string; icon: React.ReactNode; children: React.ReactNode}) {
+  return <div className="flex items-start gap-2.5">
+    <AssistantAvatar />
+    <div className="max-w-[88%] rounded-[4px_14px_14px_14px] border border-white/10 bg-white/[.04] p-3 text-xs leading-5 text-neutral-400">
+      <p className="mb-1 flex items-center gap-1.5 font-semibold text-neutral-200">{icon}{title}</p>
+      {children}
+    </div>
+  </div>;
+}
+
+function ChatAlert({tone, children}: {tone: 'error' | 'warning'; children: React.ReactNode}) {
+  return <div role={tone === 'error' ? 'alert' : 'status'} className={`ml-9 rounded-md border px-3 py-2.5 text-xs leading-5 ${tone === 'error' ? 'border-red-400/20 bg-red-400/5 text-red-300' : 'border-amber-400/20 bg-amber-400/5 text-amber-200'}`}>{children}</div>;
 }
 
 function compactJobMessage(text: string): string {
@@ -698,7 +726,21 @@ function answerFromAnalysis(question: string, analysis: AiAnalysisResult, handle
 }
 
 function AnalysisPanel({analysis, document, handled, generatingSuggestions, generationElapsedLabel, onAccept, onReject}: {analysis: AiAnalysisResult; document: CvDocument; handled: Record<string, 'accepted' | 'rejected'>; generatingSuggestions: boolean; generationElapsedLabel: string; onAccept: (suggestion: AiAnalysisResult['suggestions'][number]) => void; onReject: (id: string) => void}) {
-  return <section className="border border-white/10 bg-white/[.02] p-4"><div className="flex items-center gap-2"><Bot size={16} /><h3 className="font-semibold">Analysis</h3></div><p className="mt-3 text-sm leading-6 text-neutral-300">{analysis.fitSummary}</p>{analysis.matchedRequirements.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}{analysis.gaps.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 text-xs leading-5 text-neutral-500"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}{analysis.warnings.length > 0 && <div className="mt-4"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 text-xs leading-5 text-amber-200/70">{warning}</p>)}</div>}{generatingSuggestions && <div className="mt-5 flex items-center gap-2 border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit analysis is ready. Preparing one grounded edit · {generationElapsedLabel}</span></div>}<div className="mt-5 space-y-3">{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div></section>;
+  const hasBreakdown = analysis.matchedRequirements.length > 0 || analysis.gaps.length > 0 || analysis.warnings.length > 0;
+  return <div className="flex items-start gap-2.5">
+    <AssistantAvatar />
+    <div className="min-w-0 max-w-[88%] rounded-[4px_14px_14px_14px] border border-white/10 bg-white/[.04] p-3.5">
+      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Your fit review</h3><span className="font-mono text-[8px] uppercase tracking-wider text-neutral-600">Grounded in your CV</span></div>
+      {hasBreakdown && <details className="mt-3 border-y border-white/10 py-2 text-xs text-neutral-500">
+        <summary className="focus-ring cursor-pointer select-none text-neutral-300 hover:text-white">See matches and gaps</summary>
+        {analysis.matchedRequirements.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 leading-5"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}
+        {analysis.gaps.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Honest gaps</p>{analysis.gaps.map(gap => <p key={gap.requirement} className="mt-2 leading-5"><strong className="text-neutral-300">{gap.requirement}:</strong> {gap.explanation}</p>)}</div>}
+        {analysis.warnings.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Warnings</p>{analysis.warnings.map(warning => <p key={warning} className="mt-2 leading-5 text-amber-200/70">{warning}</p>)}</div>}
+      </details>}
+      {generatingSuggestions && <div className="mt-3 flex items-center gap-2 rounded-md border border-white/10 bg-black p-3 text-xs text-neutral-400"><LoaderCircle className="animate-spin" size={14} /><span>Fit is ready. Preparing a grounded edit · {generationElapsedLabel}</span></div>}
+      {analysis.suggestions.length > 0 && <div className="mt-4 space-y-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Edits for your approval</p>{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`rounded-md border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 rounded-sm bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 rounded-sm border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div>}
+    </div>
+  </div>;
 }
 
 function CopyButton({text, label}: {text: string; label?: string}) {
