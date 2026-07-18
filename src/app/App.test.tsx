@@ -39,6 +39,8 @@ const cloudHarness = vi.hoisted(() => ({analyze: vi.fn()}));
 vi.mock('../ai/cloudClient', () => ({analyzeWithCloud: (...args: unknown[]) => cloudHarness.analyze(...args)}));
 const interviewHarness = vi.hoisted(() => ({build: vi.fn()}));
 vi.mock('../ai/interviewClient', () => ({buildInterviewKit: (...args: unknown[]) => interviewHarness.build(...args)}));
+const researchHarness = vi.hoisted(() => ({research: vi.fn()}));
+vi.mock('../ai/researchClient', () => ({researchCompany: (...args: unknown[]) => researchHarness.research(...args)}));
 
 describe('split tailoring flow', () => {
   beforeEach(() => {
@@ -177,6 +179,7 @@ describe('cloud analysis (default)', () => {
     window.history.replaceState({}, '', '/app');
     cloudHarness.analyze.mockReset();
     interviewHarness.build.mockReset();
+    researchHarness.research.mockReset();
     try { localStorage.clear(); } catch { /* ignore */ }
   });
   afterEach(() => {
@@ -262,6 +265,57 @@ describe('cloud analysis (default)', () => {
     expect(interviewHarness.build).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
     await waitFor(() => expect(interviewHarness.build).toHaveBeenCalledTimes(1));
+  });
+
+  it('hands company research from the conversation into the persistent application kit', async () => {
+    cloudHarness.analyze.mockResolvedValue({
+      protocolVersion: 1,
+      fitSummary: 'The CV is ready for application preparation.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [],
+      suggestions: [],
+    });
+    researchHarness.research.mockResolvedValue({
+      company: 'Acme',
+      summary: {text: 'Acme builds reliable developer tools.', citationIds: ['source-1']},
+      priorities: [],
+      roleContext: null,
+      sources: [{id: 'source-1', title: 'Acme company page', url: 'https://example.com/acme'}],
+    });
+
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    expect(screen.getByRole('tab', {name: 'Application kit'})).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
+    fireEvent.click(screen.getByRole('button', {name: /Analyze CV/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+
+    expect(await screen.findByText('Build your application kit')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Who should I contact?'})).toBeInTheDocument();
+    expect(screen.getByText('Recruiter or talent partner')).toBeInTheDocument();
+    expect(screen.getByText('Hiring manager')).toBeInTheDocument();
+    expect(screen.getByText('Future peer')).toBeInTheDocument();
+    expect(screen.getByRole('tab', {name: 'Application kit'})).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', {name: 'Research company'}));
+
+    expect(screen.getByRole('heading', {name: 'Application kit'})).toBeInTheDocument();
+    expect(screen.queryByLabelText('Message CV Copilot')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Company'), {target: {value: 'Acme'}});
+    fireEvent.change(screen.getByLabelText('Role · optional'), {target: {value: 'Frontend Engineer'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Research company'}));
+
+    expect(await screen.findByText('Acme builds reliable developer tools.')).toBeInTheDocument();
+    expect(researchHarness.research).toHaveBeenCalledWith(expect.objectContaining({company: 'Acme', role: 'Frontend Engineer'}));
+    expect(screen.getByRole('tab', {name: 'Application kit · 1'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', {name: 'Conversation'}));
+    expect(screen.getByLabelText('Message CV Copilot')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Prepare outreach drafts'}));
+    expect(await screen.findByText('Question about the Frontend Engineer team at Acme')).toBeInTheDocument();
+    expect(screen.getByText('Recruiter or talent partner')).toBeInTheDocument();
+    expect(screen.getByText('Hiring manager')).toBeInTheDocument();
+    expect(screen.getByText('Future peer')).toBeInTheDocument();
   });
 });
 

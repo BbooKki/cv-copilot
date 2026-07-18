@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Copy, Download, ExternalLink, FileText, Globe, HardDrive, LoaderCircle, Mail, MessageSquare, Mic, PenLine, RotateCcw, Search, Send, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Download, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, Mic, PenLine, RotateCcw, Send, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
@@ -29,9 +29,12 @@ import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
 import {AccountPage} from '../persistence/AccountPage';
 import {LandingPage} from '../landing/LandingPage';
+import {ApplicationKit} from './ApplicationKit';
+import {ContactStrategyCard} from './ContactStrategyCard';
 
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
+type TailorView = 'conversation' | 'kit';
 type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
 type TailorMessage = {id: string; role: 'user' | 'assistant'; text: string};
 const CLOUD_CONSENT_KEY = 'cvcopilot.cloudConsent.v1';
@@ -83,6 +86,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const [undoStack, setUndoStack] = useState<CvDocument[]>([]);
   const [view, setView] = useState<View>('copilot');
   const [copilotMode, setCopilotMode] = useState<CopilotMode>('edit');
+  const [tailorView, setTailorView] = useState<TailorView>('conversation');
   const [aiMode, setAiMode] = useState<'cloud' | 'local'>('cloud');
   const [cloudConsent, setCloudConsent] = useState(() => {
     try { return localStorage.getItem(CLOUD_CONSENT_KEY) === 'granted'; } catch { return false; }
@@ -232,6 +236,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   }, [document, ready]);
 
   const clearCvDerivedResults = useCallback(() => {
+    setTailorView('conversation');
     setAnalysis(null);
     setHandledSuggestions({});
     setAnalysisError('');
@@ -378,6 +383,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
 
   const requestInterviewKit = () => {
     if (!cloudConsent) { setPendingCloudAction('interview'); setShowConsent(true); return; }
+    setTailorView('kit');
     void runInterviewKit();
   };
 
@@ -398,6 +404,11 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       setOutreachBusy(false);
     }
   }, [document, roleTitle, companyName, jobText, jobMeta]);
+
+  const requestOutreachKit = () => {
+    setTailorView('kit');
+    void runOutreach();
+  };
 
   const submitTailorMessage = (inputOverride?: string) => {
     const message = (inputOverride ?? tailorInput).trim();
@@ -431,7 +442,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     const pendingRequest = pendingCloudRequestRef.current;
     pendingCloudRequestRef.current = null;
     setPendingCloudAction(null);
-    if (action === 'interview') void runInterviewKit();
+    if (action === 'interview') { setTailorView('kit'); void runInterviewKit(); }
     else void runCloudAnalysis(pendingRequest ?? undefined);
   };
 
@@ -502,6 +513,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   const generationPhaseLabel = labelGenerationPhase(gemma.generationPhase);
   const analysisActionLabel = activeStage === 'fit' && gemma.status === 'generating' ? `Analyzing job fit · ${generationPhaseLabel} · ${elapsedLabel}` : activeStage === 'suggestions' && gemma.status === 'generating' ? `Preparing grounded edit · ${generationPhaseLabel} · ${elapsedLabel}` : 'Analyze locally';
   const hasInsufficientStorage = !gemma.cached && gemma.capability.storageAvailable !== null && gemma.capability.storageAvailable < GEMMA_MODEL_BYTES + GEMMA_STORAGE_HEADROOM_BYTES;
+  const completedKitItems = [companyBrief, interviewKit, outreachKit].filter(Boolean).length;
 
   useEffect(() => {
     tailorEndRef.current?.scrollIntoView?.({behavior: 'smooth', block: 'nearest'});
@@ -550,7 +562,12 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           <CvEditor document={document} onChange={updateDocument} />
           <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
         </div> : <div className="p-4 md:p-5">
-          <section className="overflow-hidden border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
+          <div className="mb-3 grid grid-cols-2 border border-white/10 bg-white/[.015] p-1" role="tablist" aria-label="Tailor workspace">
+            <button role="tab" aria-selected={tailorView === 'conversation'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'conversation' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('conversation')}>Conversation</button>
+            <button role="tab" aria-selected={tailorView === 'kit'} disabled={!analysis} className={`focus-ring min-h-10 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-30 ${tailorView === 'kit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>
+          </div>
+
+          {tailorView === 'conversation' && <section className="overflow-hidden border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[.02] px-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${cloudBusy || extracting || gemma.status === 'generating' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><h3 className="text-sm font-semibold">Tailor conversation</h3></div>
@@ -596,6 +613,11 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
               {analysisNotice && <ChatAlert tone="warning">{analysisNotice}</ChatAlert>}
               {invalidAnalysisOutput && <InvalidOutputPanel message={invalidAnalysisOutput.stage === 'suggestions' ? `Fit analysis is ready. Suggestions could not be generated. ${invalidAnalysisOutput.message}` : invalidAnalysisOutput.message} rawOutput={invalidAnalysisOutput.raw} retrying={gemma.status === 'generating'} retryLabel={invalidAnalysisOutput.stage === 'suggestions' ? 'Retry suggestions' : 'Retry fit analysis'} onRetry={invalidAnalysisOutput.stage === 'suggestions' ? retrySuggestions : () => runLocalAnalysis(true)} onDismiss={() => setInvalidAnalysisOutput(null)} />}
               {analysis && <AnalysisPanel analysis={analysis} document={document} handled={handledSuggestions} generatingSuggestions={activeStage === 'suggestions' && gemma.status === 'generating'} generationElapsedLabel={elapsedLabel} onAccept={accept} onReject={reject} />}
+              {analysis && <AssistantAction title="Build your application kit" icon={<FileText size={13} />}>
+                <p>Research the company, prepare for the interview, and keep the results together for this role.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2"><button className="focus-ring flex min-h-10 items-center justify-center gap-2 border border-white/15 px-3 py-2 text-[10px] font-semibold text-neutral-200 hover:border-white/30 hover:text-white" onClick={() => { setTailorView('kit'); if (companyName.trim()) void runResearch(); }}><Globe size={13} />Research company</button><button className="focus-ring flex min-h-10 items-center justify-center gap-2 bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={requestInterviewKit}><Mic size={13} />Prepare interview kit</button></div>
+              </AssistantAction>}
+              {analysis && <ContactStrategyCard companyName={companyName} researchBusy={researchBusy} outreachBusy={outreachBusy} onResearchOfficialChannels={() => { setTailorView('kit'); if (companyName.trim()) void runResearch(); }} onPrepareOutreach={requestOutreachKit} />}
               <div ref={tailorEndRef} />
             </div>
 
@@ -611,42 +633,26 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
               </div>
               <div className="mt-2 flex items-center justify-between gap-3"><p className="font-mono text-[8px] uppercase tracking-wider text-neutral-700">Enter to send · AI edits need approval</p><details className="text-right text-[10px] text-neutral-600"><summary className="focus-ring cursor-pointer select-none hover:text-white">Job details</summary><div className="mt-3 w-[min(420px,calc(100vw-64px))] text-left"><label className="font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-xs outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={14} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-3 block font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={5} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-xs leading-5 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></div></details></div>
             </div>
-          </section>
+          </section>}
 
-          {aiMode === 'cloud' && analysis && <section className="mt-4 border border-white/10 bg-white/[.02] p-4" aria-labelledby="research-title">
-            <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Globe size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Optional · cited</p><h3 id="research-title" className="mt-1 font-semibold">Research the company</h3></div></div>
-            <p className="mt-3 text-xs leading-5 text-neutral-500">Uses Google Search to build a cited briefing on the company and role. Sends only the company, role, and public job text — never your CV or contact details. Individual people and social profiles are excluded.</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Company</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={companyName} onChange={event => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setCompanyName(event.target.value); }} placeholder="Acme Inc." /></label>
-              <label className="block"><span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-neutral-600">Role · optional</span><input className="focus-ring w-full border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-white/40" value={roleTitle} onChange={event => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setRoleTitle(event.target.value); }} placeholder="Frontend Engineer" /></label>
-            </div>
-            <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={researchBusy || !companyName.trim()} onClick={() => void runResearch()}>{researchBusy ? <><LoaderCircle className="animate-spin" size={14} />Researching with Google…</> : <><Search size={14} />Research this company with Google</>}</button>
-            {researchError && <p className="mt-3 text-xs leading-5 text-amber-300">{researchError}</p>}
-            {companyBrief && <div className="mt-4 border border-white/10 bg-black p-3">
-              <p className="text-sm leading-6 text-neutral-200">{companyBrief.summary.text} <ClaimCitations ids={companyBrief.summary.citationIds} sources={companyBrief.sources} /></p>
-              {companyBrief.priorities.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Current priorities</p><ul className="mt-2 space-y-1">{companyBrief.priorities.map((priority, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {priority.text} <ClaimCitations ids={priority.citationIds} sources={companyBrief.sources} /></li>)}</ul></div>}
-              {companyBrief.roleContext && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">For this role</p><p className="mt-1 text-xs leading-5 text-neutral-400">{companyBrief.roleContext.text} <ClaimCitations ids={companyBrief.roleContext.citationIds} sources={companyBrief.sources} /></p></div>}
-              <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{companyBrief.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
-            </div>}
-          </section>}
-          {aiMode === 'cloud' && analysis && <section className="mt-4 border border-white/10 bg-white/[.02] p-4" aria-labelledby="prepare-title">
-            <div className="flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Mic size={15} /></div><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Prepare · grounded</p><h3 id="prepare-title" className="mt-1 font-semibold">Interview kit</h3></div></div>
-            <p className="mt-3 text-xs leading-5 text-neutral-500">Likely questions, smart questions to ask, and a 30-second pitch — drawn only from your CV. The pitch is rejected if it invents anything not in your CV.</p>
-            <button className="focus-ring mt-4 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-3 text-xs font-semibold disabled:opacity-30" disabled={interviewBusy} onClick={requestInterviewKit}>{interviewBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mic size={14} />{interviewKit ? 'Regenerate interview kit' : 'Prepare interview kit'}</>}</button>
-            {interviewError && <p className="mt-3 text-xs leading-5 text-amber-300">{interviewError}</p>}
-            {interviewKit && <div className="mt-4 space-y-4">
-              <div className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">30-second pitch</p><CopyButton text={interviewKit.pitch.text} /></div><p className="mt-2 text-sm leading-6 text-neutral-200">{interviewKit.pitch.text}</p></div>
-              <div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Likely questions</p><ul className="mt-2 space-y-3">{interviewKit.questions.map((item, index) => <li key={index} className="border border-white/10 bg-black p-3"><p className="text-sm leading-5 text-neutral-200">{item.question}</p><p className="mt-1 text-xs leading-5 text-neutral-500">{item.rationale}</p></li>)}</ul></div>
-              <div><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Questions to ask them</p><CopyButton text={interviewKit.questionsToAsk.join('\n')} label="Copy all" /></div><ul className="mt-2 space-y-1">{interviewKit.questionsToAsk.map((question, index) => <li key={index} className="text-xs leading-5 text-neutral-400">• {question}</li>)}</ul></div>
-              <div className="border-t border-white/10 pt-4">
-                <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Outreach emails</p>
-                <p className="mt-1 text-[11px] leading-4 text-neutral-600">Quota-free local templates built from exact CV fields, with placeholders for anything unknown.</p>
-                <button className="focus-ring mt-3 flex w-full items-center justify-center gap-2 border border-white/15 px-3 py-2.5 text-xs font-semibold disabled:opacity-30" disabled={outreachBusy} onClick={() => void runOutreach()}>{outreachBusy ? <><LoaderCircle className="animate-spin" size={14} />Preparing…</> : <><Mail size={14} />{outreachKit ? 'Regenerate templates' : 'Prepare outreach templates'}</>}</button>
-                {outreachError && <p className="mt-2 text-xs leading-5 text-amber-300">{outreachError}</p>}
-                {outreachKit && <div className="mt-3 space-y-3">{[{label: 'Recruiter intro', email: outreachKit.recruiterIntro}, {label: 'Follow-up', email: outreachKit.followUp}].map(({label, email}) => <div key={label} className="border border-white/10 bg-black p-3"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{label}</p><CopyButton text={`Subject: ${email.subject}\n\n${email.body}`} /></div><p className="mt-2 text-xs font-semibold text-neutral-200">{email.subject}</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-neutral-400">{email.body}</p></div>)}</div>}
-              </div>
-            </div>}
-          </section>}
+          {tailorView === 'kit' && analysis && <ApplicationKit
+            companyName={companyName}
+            roleTitle={roleTitle}
+            companyBrief={companyBrief}
+            researchBusy={researchBusy}
+            researchError={researchError}
+            interviewKit={interviewKit}
+            interviewBusy={interviewBusy}
+            interviewError={interviewError}
+            outreachKit={outreachKit}
+            outreachBusy={outreachBusy}
+            outreachError={outreachError}
+            onCompanyNameChange={value => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setCompanyName(value); }}
+            onRoleTitleChange={value => { setCompanyBrief(null); setInterviewKit(null); setOutreachKit(null); setRoleTitle(value); }}
+            onResearch={() => void runResearch()}
+            onPrepareInterview={requestInterviewKit}
+            onPrepareOutreach={requestOutreachKit}
+          />}
         </div>}
       </aside>
     </div>
@@ -754,21 +760,6 @@ function AnalysisPanel({analysis, document, handled, generatingSuggestions, gene
       {analysis.suggestions.length > 0 && <div className="mt-4 space-y-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Edits for your approval</p>{analysis.suggestions.map(suggestion => { const state = handled[suggestion.id]; const valid = validateSuggestionTarget(document, suggestion); return <article key={suggestion.id} className={`rounded-md border p-3 ${state === 'accepted' ? 'border-emerald-400/25 bg-emerald-400/5' : state === 'rejected' ? 'border-white/5 opacity-50' : 'border-white/10 bg-black'}`}><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{suggestion.target.section} · {suggestion.target.field}</p><div className="mt-3 space-y-2 text-xs leading-5"><p className="text-neutral-600 line-through">{suggestion.originalText}</p><p className="text-neutral-200">{suggestion.proposedText}</p></div><p className="mt-3 text-xs leading-5 text-neutral-500">{suggestion.reason}</p>{!state && <div className="mt-3 flex gap-2"><button disabled={!valid} className="focus-ring flex items-center gap-1 rounded-sm bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30" onClick={() => onAccept(suggestion)}><Check size={12} />Accept</button><button className="focus-ring flex items-center gap-1 rounded-sm border border-white/10 px-3 py-2 text-[10px] text-neutral-400" onClick={() => onReject(suggestion.id)}><X size={12} />Reject</button></div>}{state && <p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-neutral-500">{state}</p>}</article>; })}</div>}
     </div>
   </div>;
-}
-
-function CopyButton({text, label}: {text: string; label?: string}) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard?.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1_500);
-  };
-  return <button className="focus-ring inline-flex items-center gap-1 border border-white/10 px-2 py-1 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={copy}>{copied ? <Check size={11} /> : <Copy size={11} />}{copied ? 'Copied' : label ?? 'Copy'}</button>;
-}
-
-function ClaimCitations({ids, sources}: {ids: string[]; sources: GroundedCompanyBrief['sources']}) {
-  const byId = new Map(sources.map(source => [source.id, source]));
-  return <span className="whitespace-nowrap">{ids.map((id, index) => { const source = byId.get(id); return source ? <a key={id} href={source.url} target="_blank" rel="noreferrer" aria-label={`Source: ${source.title}`} className="ml-1 text-[10px] text-neutral-300 underline underline-offset-2 hover:text-white">[{index + 1}]</a> : null; })}</span>;
 }
 
 function formatElapsed(seconds: number): string {

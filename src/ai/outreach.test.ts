@@ -8,7 +8,9 @@ describe('outreach kit', () => {
     expect(kit.recruiterIntro.subject).toContain('Frontend Engineer');
     expect(kit.recruiterIntro.subject).toContain('Acme');
     expect(kit.recruiterIntro.body).toContain('Product Engineer at Northstar Labs');
-    expect(kit.recruiterIntro.body).toContain('[Hiring Manager]');
+    expect(kit.recruiterIntro.body).toContain('[Recruiter Name]');
+    expect(kit.hiringManagerIntro.body).toContain('[Hiring Manager]');
+    expect(kit.peerIntro.body).toContain('[Team Member]');
   });
 
   it('falls back to bracket placeholders when company/role are absent', () => {
@@ -20,10 +22,14 @@ describe('outreach kit', () => {
   it('parses a valid outreach kit', () => {
     const kit = parseOutreachKit(JSON.stringify({
       protocolVersion: 1,
-      recruiterIntro: {subject: 'Interest in the role', body: 'Hello [Hiring Manager], ...'},
+      recruiterIntro: {subject: 'Interest in the role', body: 'Hello [Recruiter Name], ...'},
+      hiringManagerIntro: {subject: 'Team priorities', body: 'Hello [Hiring Manager], ...'},
+      peerIntro: {subject: 'Team question', body: 'Hello [Team Member], ...'},
       followUp: {subject: 'Thank you', body: 'Thanks for your time, [Name].'},
     }));
     expect(kit.recruiterIntro.subject).toContain('Interest');
+    expect(kit.hiringManagerIntro.subject).toContain('priorities');
+    expect(kit.peerIntro.body).toContain('[Team Member]');
     expect(kit.followUp.body).toContain('Thanks');
   });
 

@@ -9,6 +9,8 @@ const emailSchema = z.object({
 export const outreachKitSchema = z.object({
   protocolVersion: z.literal(1),
   recruiterIntro: emailSchema,
+  hiringManagerIntro: emailSchema,
+  peerIntro: emailSchema,
   followUp: emailSchema,
 }).strict();
 
@@ -39,7 +41,15 @@ export function buildVerifiedOutreachKit(request: OutreachRequest): OutreachKit 
     protocolVersion: 1,
     recruiterIntro: {
       subject: `Interest in ${role} at ${company}`,
-      body: `Hello [Hiring Manager],\n\nI'm reaching out about the ${role} opportunity at ${company}. ${evidence}\n\nI'd welcome the opportunity to discuss how this experience could support the team.\n\nBest,\n[Your Name]`,
+      body: `Hello [Recruiter Name],\n\nI'm reaching out about the ${role} opportunity at ${company}. ${evidence}\n\nI'd appreciate any context you can share about the hiring process and what the team is prioritizing for this role.\n\nBest,\n[Your Name]`,
+    },
+    hiringManagerIntro: {
+      subject: `${role} — interest in your team's priorities`,
+      body: `Hello [Hiring Manager],\n\nI'm interested in the ${role} opportunity at ${company}. ${evidence}\n\nI'd value the chance to learn what success looks like in the role and which problems are most important for the team right now.\n\nBest,\n[Your Name]`,
+    },
+    peerIntro: {
+      subject: `Question about the ${role} team at ${company}`,
+      body: `Hello [Team Member],\n\nI'm considering the ${role} opportunity at ${company}. ${evidence}\n\nIf you're comfortable sharing, I'd be interested in how the team collaborates day to day and what makes someone effective in the role.\n\nBest,\n[Your Name]`,
     },
     followUp: {
       subject: `Thank you — ${role} conversation`,

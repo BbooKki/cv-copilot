@@ -28,7 +28,7 @@
 
 - Reordering with drag handles
 - Theme accent selection
-- Quota-free deterministic outreach templates
+- Role-based contact strategy and quota-free deterministic outreach templates
 - Shareable read-only link
 
 ## Will not ship

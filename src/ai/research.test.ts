@@ -7,6 +7,7 @@ describe('company research', () => {
     expect(prompt).toContain('Acme');
     expect(prompt).toContain('Frontend Engineer');
     expect(prompt).toMatch(/do not research, name, or profile individual employees/i);
+    expect(prompt).toMatch(/official company careers, team, and contact pages/i);
   });
 
   it('neutralizes boundary injection inside research inputs', () => {

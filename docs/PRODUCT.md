@@ -28,7 +28,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 4. Choose recommended cloud analysis or optional on-device Private Mode.
 5. Analyze fit, review evidence, and accept or reject field-level suggestions.
 6. Optionally research the company with user-triggered Google grounding and claim-level citations.
-7. Generate likely interview questions and a deterministic CV-derived pitch; create quota-free outreach templates locally.
+7. Generate likely interview questions and a deterministic CV-derived pitch; review a role-based contact strategy and create quota-free outreach templates locally.
 8. Edit supported narrative fields directly from the paper preview and select one of four tested templates.
 9. Export or print the CV as PDF, then optionally sign in and, with premium access, save the editable CV to Supabase.
 
@@ -57,6 +57,7 @@ A technically comfortable job seeker who already has work history and wants a fa
 - AI never silently changes CV state.
 - Company research never receives CV content, starts only after a user action, and shows citations attached to individual claims.
 - Interview pitches are reconstructed from cited CV fields before display; outreach drafts are deterministic local templates.
+- Contact strategy recommends professional roles to approach and may link to official company channels, but never discovers named employees, personal profiles, or inferred contact details.
 - Changing CV or job inputs invalidates dependent generated results.
 - AI design output is schema-validated and changes presentation only after explicit acceptance.
 - PDF/print output is legible, removes editor chrome, and avoids obvious section clipping.
