@@ -510,7 +510,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 shrink-0 items-center border border-white/20 bg-white px-2.5"><img src="/CVcopilot.svg" alt="CV Copilot" className="h-5 w-auto" /></div><div className="min-w-0"><h1 className="truncate font-display text-base font-semibold">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Cloud AI · Private mode · Truthful edits</p></div></div>
+        <div className="min-w-0"><h1 className="sr-only">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Cloud AI · Private mode · Truthful edits</p></div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 md:flex"><StatusPill icon={<HardDrive size={12} />} label={saveState === 'saving' ? 'Saving locally' : saveState === 'error' ? 'Save failed' : 'Saved locally'} tone={saveState === 'error' ? 'error' : 'neutral'} />
             <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
