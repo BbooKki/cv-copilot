@@ -4,7 +4,7 @@ import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendatio
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
-import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, validateSuggestionTarget} from '../ai/suggestions';
+import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument, validateSuggestionTarget} from '../ai/suggestions';
 import {analyzeWithCloud} from '../ai/cloudClient';
 import {researchCompany} from '../ai/researchClient';
 import type {GroundedCompanyBrief} from '../ai/research';
@@ -169,9 +169,10 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       } else if (completedStage === 'suggestions') {
         const fit = fitAnalysisRef.current;
         if (!fit) throw new Error('The completed fit analysis is no longer available.');
-        const suggestions = parseSuggestionResult(raw);
         const request = analysisRequestRef.current;
         if (!request) throw new Error('The analysis request is no longer available.');
+        const parsed = parseSuggestionResult(raw);
+        const suggestions = {...parsed, suggestions: bindSuggestionsToDocument(request.cv, parsed.suggestions)};
         assertSuggestionsAreGrounded(request.cv, suggestions.suggestions);
         setAnalysis(combineAnalysis(fit, suggestions));
         setHandledSuggestions({});

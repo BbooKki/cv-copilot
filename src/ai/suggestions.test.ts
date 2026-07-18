@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {testCv} from '../cv/testFixture';
 import type {AiSuggestion} from './protocol';
-import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, validateSuggestionTarget} from './suggestions';
+import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument, validateSuggestionTarget} from './suggestions';
 
 function testSuggestion(): AiSuggestion {
   const experience = testCv.experience[0];
@@ -31,6 +31,24 @@ describe('suggestion workflow', () => {
     changed.experience[0].highlights[0].text = 'Changed independently';
     expect(validateSuggestionTarget(changed, suggestion)).toBe(false);
     expect(() => applySuggestion(changed, suggestion)).toThrow(/stale/i);
+  });
+
+  it('binds model-supplied original text to the canonical CV without mutating the response', () => {
+    const suggestion = testSuggestion();
+    suggestion.originalText = 'A paraphrase that is not in the CV.';
+
+    const [bound] = bindSuggestionsToDocument(testCv, [suggestion]);
+
+    expect(bound.originalText).toBe(testCv.experience[0].highlights[0].text);
+    expect(suggestion.originalText).toBe('A paraphrase that is not in the CV.');
+    expect(() => assertSuggestionsAreGrounded(testCv, [bound])).not.toThrow();
+  });
+
+  it('refuses to bind an original value for an unsafe target', () => {
+    const suggestion = testSuggestion();
+    suggestion.target = {section: 'experience', itemId: testCv.experience[0].id, field: 'company'};
+
+    expect(() => bindSuggestionsToDocument(testCv, [suggestion])).toThrow(/cannot be edited/i);
   });
 
   it('rejects unsafe target fields and unknown evidence IDs before review', () => {

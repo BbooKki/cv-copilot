@@ -6,6 +6,7 @@ import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type Ai
 import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
+import {assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
 import {generateGrounded, generateText, GEMINI_MODEL, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
@@ -123,16 +124,24 @@ async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
   const prompt = buildCloudAnalysisPrompt(safeRequest);
   const raw = await generateText(prompt, {json: true, temperature: 0.2, maxOutputTokens: ANALYSIS_MAX_TOKENS});
   try {
-    return parseAiResult(raw);
+    return parseAndGroundAnalysis(raw, safeRequest);
   } catch {
     const repairPrompt = `${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON with every array and object closed.`;
     const retry = await generateText(repairPrompt, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
     try {
-      return parseAiResult(retry);
+      return parseAndGroundAnalysis(retry, safeRequest);
     } catch {
       throw new GeminiError('invalid-output', 'The AI returned an unusable response. Please try again.', 502);
     }
   }
+}
+
+function parseAndGroundAnalysis(raw: string, request: AiAnalysisRequest): AiAnalysisResult {
+  const parsed = parseAiResult(raw);
+  assertFitEvidenceExists(request.cv, parsed);
+  const suggestions = bindSuggestionsToDocument(request.cv, parsed.suggestions);
+  assertSuggestionsAreGrounded(request.cv, suggestions);
+  return {...parsed, suggestions};
 }
 
 async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit> {

@@ -23,6 +23,19 @@ export function validateSuggestionTarget(document: CvDocument, suggestion: AiSug
   return resolveText(document, suggestion) === suggestion.originalText && suggestion.evidenceIds.length > 0 && suggestion.evidenceIds.every(id => knownIds.has(id)) && hasOnlyKnownNumbers(document, suggestion.proposedText);
 }
 
+/**
+ * Makes the canonical CV, rather than model-generated text, the source of the
+ * original side of every proposed edit. The target still has to resolve to an
+ * allowlisted editable field, and the normal grounding checks run afterwards.
+ */
+export function bindSuggestionsToDocument(document: CvDocument, suggestions: AiSuggestion[]): AiSuggestion[] {
+  return suggestions.map(suggestion => {
+    const originalText = resolveText(document, suggestion);
+    if (originalText === null) throw new Error(`Suggestion ${suggestion.id} targets a field that cannot be edited by AI.`);
+    return {...suggestion, originalText};
+  });
+}
+
 export function assertSuggestionsAreGrounded(document: CvDocument, suggestions: AiSuggestion[]): void {
   const suggestionIds = new Set<string>();
   const knownIds = collectEvidenceIds(document);
