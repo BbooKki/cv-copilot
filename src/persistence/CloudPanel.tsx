@@ -68,11 +68,7 @@ export function CloudPanel({
     }
   };
 
-  if (authState.status === 'unavailable') {
-    return <CloudPanelShell busy={false}>
-      <p className="text-xs leading-5 text-neutral-500">Accounts are not configured. Your CV is still saved locally in this browser.</p>
-    </CloudPanelShell>;
-  }
+  if (authState.status === 'unavailable') return null;
 
   return <CloudPanelShell busy={busy || authState.status === 'loading'}>
     {authState.status === 'loading' && <p className="text-xs leading-5 text-neutral-500" role="status">Checking your account…</p>}
