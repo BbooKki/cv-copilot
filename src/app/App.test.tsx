@@ -39,6 +39,8 @@ const interviewHarness = vi.hoisted(() => ({build: vi.fn()}));
 vi.mock('../ai/interviewClient', () => ({buildInterviewKit: (...args: unknown[]) => interviewHarness.build(...args)}));
 const researchHarness = vi.hoisted(() => ({research: vi.fn()}));
 vi.mock('../ai/researchClient', () => ({researchCompany: (...args: unknown[]) => researchHarness.research(...args)}));
+const extractHarness = vi.hoisted(() => ({extract: vi.fn()}));
+vi.mock('../jobs/client', () => ({extractJob: (...args: unknown[]) => extractHarness.extract(...args)}));
 
 describe('split tailoring flow', () => {
   beforeEach(() => {
@@ -178,6 +180,7 @@ describe('cloud analysis (default)', () => {
     cloudHarness.analyze.mockReset();
     interviewHarness.build.mockReset();
     researchHarness.research.mockReset();
+    extractHarness.extract.mockReset();
     try { localStorage.clear(); } catch { /* ignore */ }
   });
   afterEach(() => {
@@ -205,6 +208,39 @@ describe('cloud analysis (default)', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
 
     expect(await screen.findByText('Cloud analysis confirms strong front-end alignment.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Your fit review'}).parentElement?.parentElement).toHaveTextContent('Cloud analysis confirms strong front-end alignment.');
+    expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches a job URL without silently starting cloud analysis', async () => {
+    extractHarness.extract.mockResolvedValue({
+      url: 'https://example.com/jobs/frontend',
+      title: 'Frontend Engineer',
+      company: 'Acme',
+      text: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.',
+    });
+    cloudHarness.analyze.mockResolvedValue({
+      protocolVersion: 1,
+      fitSummary: 'The fetched role is a partial match.',
+      matchedRequirements: [],
+      gaps: [],
+      warnings: [],
+      suggestions: [],
+    });
+
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
+    fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
+    fireEvent.change(screen.getByLabelText('Message CV Copilot'), {target: {value: 'https://example.com/jobs/frontend'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Send message'}));
+
+    expect(await screen.findByText(/Job fetched: Frontend Engineer at Acme/)).toBeInTheDocument();
+    expect(cloudHarness.analyze).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Analyze CV'}));
+    expect(cloudHarness.analyze).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
+
+    expect(await screen.findByText('The fetched role is a partial match.')).toBeInTheDocument();
     expect(cloudHarness.analyze).toHaveBeenCalledTimes(1);
   });
 

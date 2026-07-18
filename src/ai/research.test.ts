@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {buildCompanyResearchPrompt, isExcludedSource, parseCompanyBrief} from './research';
+import {buildCompanyResearchPrompt, isExcludedSource, officialCompanyChannels, parseCompanyBrief} from './research';
 
 describe('company research', () => {
   it('builds a prompt that forbids people/social research and includes the role', () => {
@@ -8,6 +8,7 @@ describe('company research', () => {
     expect(prompt).toContain('Frontend Engineer');
     expect(prompt).toMatch(/do not research, name, or profile individual employees/i);
     expect(prompt).toMatch(/official company careers, team, and contact pages/i);
+    expect(prompt).toMatch(/must use Google Search/i);
   });
 
   it('neutralizes boundary injection inside research inputs', () => {
@@ -48,6 +49,22 @@ describe('company research', () => {
     const raw = 'Here is the briefing:\n{"summary":"Acme is a SaaS firm.","priorities":["Growth"],"roleContext":""} Hope that helps!';
     const brief = parseCompanyBrief(raw, [{id: 'source-0', title: 'Acme', url: 'https://acme.com'}], claimsSupportedBy(raw, ['Acme is a SaaS firm.', 'Growth']), 'Acme');
     expect(brief.summary.text).toBe('Acme is a SaaS firm.');
+  });
+
+  it('surfaces relevant official hiring channels without personal profiles', () => {
+    const brief = {
+      company: 'Acme',
+      summary: {text: 'Acme builds tooling.', citationIds: ['source-0']},
+      priorities: [],
+      roleContext: null,
+      sources: [
+        {id: 'source-0', title: 'Acme Careers', url: 'https://careers.acme.com/jobs'},
+        {id: 'source-1', title: 'Acme on LinkedIn', url: 'https://linkedin.com/company/acme'},
+        {id: 'source-2', title: 'Industry report', url: 'https://example.com/acme-report'},
+      ],
+    };
+
+    expect(officialCompanyChannels(brief)).toEqual([brief.sources[0]]);
   });
 });
 

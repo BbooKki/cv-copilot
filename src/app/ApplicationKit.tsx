@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {Check, Copy, ExternalLink, Globe, LoaderCircle, Mail, Mic, Search} from 'lucide-react';
-import type {GroundedCompanyBrief} from '../ai/research';
+import {officialCompanyChannels, type GroundedCompanyBrief} from '../ai/research';
 import type {InterviewKit} from '../ai/interview';
 import type {OutreachKit} from '../ai/outreach';
 
@@ -88,10 +88,12 @@ export function ApplicationKit({companyName, roleTitle, companyBrief, researchBu
 }
 
 function CompanyBrief({brief}: {brief: GroundedCompanyBrief}) {
+  const hiringChannels = officialCompanyChannels(brief);
   return <div className="mt-4 border border-white/10 bg-black p-3">
     <p className="text-sm leading-6 text-neutral-200">{brief.summary.text} <ClaimCitations ids={brief.summary.citationIds} sources={brief.sources} /></p>
     {brief.priorities.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Current priorities</p><ul className="mt-2 space-y-2">{brief.priorities.map(priority => <li key={priority.text} className="text-xs leading-5 text-neutral-400">• {priority.text} <ClaimCitations ids={priority.citationIds} sources={brief.sources} /></li>)}</ul></div>}
     {brief.roleContext && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">For this role</p><p className="mt-1 text-xs leading-5 text-neutral-400">{brief.roleContext.text} <ClaimCitations ids={brief.roleContext.citationIds} sources={brief.sources} /></p></div>}
+    {hiringChannels.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Official hiring channels</p><ul className="mt-2 space-y-1">{hiringChannels.map(source => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>}
     <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Sources</p><ul className="mt-2 space-y-1">{brief.sources.map(source => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 text-xs text-neutral-300 underline underline-offset-2 hover:text-white"><ExternalLink size={11} />{source.title}</a></li>)}</ul></div>
   </div>;
 }

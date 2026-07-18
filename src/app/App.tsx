@@ -158,7 +158,6 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
         assertFitEvidenceExists(request.cv, fit);
         fitAnalysisRef.current = fit;
         setAnalysis({...fit, suggestions: []});
-        setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: fit.fitSummary}]);
         setHandledSuggestions({});
         setAnalysisError('');
         setInvalidAnalysisOutput(null);
@@ -296,7 +295,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); saveFieldEditor(); }
   };
 
-  const handleExtract = async (inputUrl = jobUrl, analyzeAfter = false) => {
+  const handleExtract = async (inputUrl = jobUrl) => {
     setExtracting(true); setJobError('');
     try {
       const result = await extractJob(inputUrl);
@@ -305,8 +304,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       setJobText(result.text); setJobMeta({title: result.title, company: result.company, sourceUrl: result.url});
       if (result.company) setCompanyName(result.company);
       if (result.title) setRoleTitle(result.title);
-      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: `I fetched ${result.title ?? 'the job posting'}${result.company ? ` at ${result.company}` : ''}. I’ll use the extracted description for the comparison.`}]);
-      if (analyzeAfter && aiMode === 'cloud') requestCloudAnalysis({text: result.text, meta: {title: result.title, company: result.company, sourceUrl: result.url}});
+      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: `Job fetched: ${result.title ?? 'job posting'}${result.company ? ` at ${result.company}` : ''}. Review the extracted description in Job details, then start the comparison when you’re ready.`}]);
     } catch (cause) { setJobError(cause instanceof Error ? cause.message : 'Unable to extract this page.'); }
     finally { setExtracting(false); }
   };
@@ -328,7 +326,6 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       assertFitEvidenceExists(document, result);
       assertSuggestionsAreGrounded(document, result.suggestions);
       setAnalysis(result);
-      setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: result.fitSummary}]);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Cloud analysis failed.';
       setAnalysis(null);
@@ -425,7 +422,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'user', text: isUrl ? compactUrl(message) : message}]);
 
     if (isUrl) {
-      void handleExtract(message, true);
+      void handleExtract(message);
       return;
     }
     if (!analysis && message.length >= 40) {
@@ -757,6 +754,7 @@ function AnalysisPanel({analysis, document, handled, generatingSuggestions, gene
     <AssistantAvatar />
     <div className="min-w-0 max-w-[88%] rounded-[4px_14px_14px_14px] border border-white/10 bg-white/[.04] p-3.5">
       <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Your fit review</h3><span className="font-mono text-[8px] uppercase tracking-wider text-neutral-600">Grounded in your CV</span></div>
+      <p className="mt-2 text-sm leading-5 text-neutral-300">{analysis.fitSummary}</p>
       {hasBreakdown && <details className="mt-3 border-y border-white/10 py-2 text-xs text-neutral-500">
         <summary className="focus-ring cursor-pointer select-none text-neutral-300 hover:text-white">See matches and gaps</summary>
         {analysis.matchedRequirements.length > 0 && <div className="mt-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Verified matches</p>{analysis.matchedRequirements.map(match => <p key={`${match.requirement}-${match.cvItemId ?? ''}`} className="mt-2 leading-5"><strong className="text-neutral-300">{match.requirement}:</strong> {match.evidence}</p>)}</div>}
