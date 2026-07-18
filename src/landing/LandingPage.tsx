@@ -77,7 +77,12 @@ export function LandingPage({onStart, onPricing, onSignIn, onSignUp}: LandingPag
   return <main className="min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <p className="hidden font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600 sm:block">Truthful · Grounded · User approved</p>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 shrink-0 items-center border border-white/20 bg-white px-2.5">
+            <img src="/CVcopilot.svg" alt="CV Copilot" className="h-5 w-auto" />
+          </div>
+          <p className="hidden font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600 sm:block">Truthful · Grounded · User approved</p>
+        </div>
         <nav className="flex items-center gap-2" aria-label="Primary">
           <a href="#features" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">Features</a>
           <a href="#how" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">How it works</a>
@@ -201,11 +206,6 @@ export function LandingPage({onStart, onPricing, onSignIn, onSignUp}: LandingPag
 
     <footer className="border-t border-white/10">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 md:flex-row md:px-6">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 items-center border border-white/20 bg-white px-2">
-            <img src="/CVcopilot.svg" alt="CV Copilot" className="h-4 w-auto" />
-          </div>
-        </div>
         <p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Grounded CV tailoring · No account required</p>
       </div>
     </footer>
