@@ -567,9 +567,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           </section>
           {LOCAL_AI_ENABLED && <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />}
         </div> : <div className="p-4 md:p-5">
-          <div className="mb-3 grid grid-cols-2 border border-white/10 bg-white/[.015] p-1" role="tablist" aria-label="Tailor workspace">
+          <div className={`mb-3 grid ${analysis ? 'grid-cols-2' : 'grid-cols-1'} border border-white/10 bg-white/[.015] p-1`} role="tablist" aria-label="Tailor workspace">
             <button role="tab" aria-selected={tailorView === 'conversation'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'conversation' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('conversation')}>Conversation</button>
-            <button role="tab" aria-selected={tailorView === 'kit'} disabled={!analysis} className={`focus-ring min-h-10 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-30 ${tailorView === 'kit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>
+            {analysis && <button role="tab" aria-selected={tailorView === 'kit'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'kit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>}
           </div>
 
           {tailorView === 'conversation' && <section className="overflow-hidden border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">

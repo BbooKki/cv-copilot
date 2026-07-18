@@ -285,7 +285,7 @@ describe('cloud analysis (default)', () => {
     render(<App />);
     fireEvent.change(await screen.findByLabelText('Full name'), {target: {value: 'Test User'}});
     fireEvent.click(screen.getByRole('tab', {name: 'Tailor'}));
-    expect(screen.getByRole('tab', {name: 'Application kit'})).toBeDisabled();
+    expect(screen.queryByRole('tab', {name: 'Application kit'})).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Job description'), {target: {value: 'Frontend role requiring React, TypeScript, testing, and accessible UI development.'}});
     fireEvent.click(screen.getByRole('button', {name: /Analyze CV/}));
     fireEvent.click(screen.getByRole('button', {name: 'Use cloud AI'}));
