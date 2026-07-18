@@ -45,19 +45,26 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigate = useCallback((path: '/' | '/app' | '/account' | '/account/reset-password') => {
+  const navigate = useCallback((path: AppPath) => {
     window.history.pushState({}, '', path);
-    setRoute(appRoute(path));
+    setRoute(appRoute(new URL(path, window.location.origin).pathname));
   }, []);
 
   if (route === 'landing') {
-    return <LandingPage onStart={() => navigate('/app')} />;
+    return <LandingPage
+      onStart={() => navigate('/app')}
+      onSignIn={() => navigate('/account?mode=sign-in&from=landing')}
+      onSignUp={() => navigate('/account?mode=sign-up&from=landing')}
+    />;
   }
 
   if (route !== 'workspace') {
+    const fromLanding = new URLSearchParams(window.location.search).get('from') === 'landing';
     return <AccountPage
       passwordRecovery={route === 'password-recovery'}
-      onBack={() => navigate('/app')}
+      initialMode={accountMode(window.location.search)}
+      backLabel={fromLanding ? 'Back to home' : 'Back to editor'}
+      onBack={() => navigate(fromLanding ? '/' : '/app')}
       onOpenDocument={async document => {
         await localResumeRepository.save(document);
         navigate('/app');
@@ -659,6 +666,12 @@ function appRoute(pathname: string): 'landing' | 'workspace' | 'account' | 'pass
   if (pathname === '/account') return 'account';
   if (pathname === '/app') return 'workspace';
   return 'landing';
+}
+
+type AppPath = '/' | '/app' | '/account' | '/account/reset-password' | `/account?${string}`;
+
+function accountMode(search: string): 'sign-in' | 'sign-up' {
+  return new URLSearchParams(search).get('mode') === 'sign-up' ? 'sign-up' : 'sign-in';
 }
 
 function ChatBubble({role, children}: {role: TailorMessage['role']; children: React.ReactNode}) {

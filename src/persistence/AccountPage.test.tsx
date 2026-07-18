@@ -45,6 +45,14 @@ describe('AccountPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('confirm your account');
   });
 
+  it('can open directly in create-account mode', async () => {
+    const auth = createAuth(null);
+    render(<AccountPage initialMode="sign-up" auth={auth} entitlements={premium} repository={createRepository()} onBack={vi.fn()} onOpenDocument={vi.fn()} onPasswordResetComplete={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', {name: 'Create your account'})).toBeInTheDocument();
+    expect(screen.getByRole('tab', {name: 'Create account'})).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('lists, opens, and explicitly confirms deletion of owner CVs', async () => {
     const session = {user: {id: 'user-1', email: 'person@example.com'}} as unknown as Session;
     const repository = createRepository();

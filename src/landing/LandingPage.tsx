@@ -2,6 +2,8 @@ import {ArrowRight, Check, Cpu, Download, FileText, Globe, Lock, Mic, ScanSearch
 
 type LandingPageProps = {
   onStart: () => void;
+  onSignIn: () => void;
+  onSignUp: () => void;
 };
 
 const FEATURES = [
@@ -67,7 +69,7 @@ function Eyebrow({children}: {children: React.ReactNode}) {
   return <p className="font-mono text-[10px] uppercase tracking-[.22em] text-neutral-500">{children}</p>;
 }
 
-export function LandingPage({onStart}: LandingPageProps) {
+export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
   return <main className="min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
@@ -75,13 +77,14 @@ export function LandingPage({onStart}: LandingPageProps) {
           <div className="grid h-9 w-9 shrink-0 place-items-center border border-white/20 bg-white text-black"><FileText size={18} /></div>
           <div>
             <p className="font-display text-base font-semibold leading-none">CV Copilot</p>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private · Truthful · Grounded</p>
+            <p className="mt-1 hidden font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600 sm:block">Private · Truthful · Grounded</p>
           </div>
         </div>
         <nav className="flex items-center gap-2" aria-label="Primary">
           <a href="#features" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">Features</a>
           <a href="#how" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">How it works</a>
-          <button className="focus-ring flex items-center gap-1.5 bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onStart}>Open the editor<ArrowRight size={14} /></button>
+          <button type="button" className="focus-ring min-h-10 whitespace-nowrap px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={onSignIn}>Sign in</button>
+          <button type="button" className="focus-ring flex min-h-10 items-center gap-1.5 whitespace-nowrap bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onSignUp}>Create account<ArrowRight size={14} /></button>
         </nav>
       </div>
     </header>

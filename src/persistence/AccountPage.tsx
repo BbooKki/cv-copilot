@@ -21,6 +21,8 @@ import {useSupabaseSession} from './useSupabaseSession';
 
 type AccountPageProps = {
   passwordRecovery?: boolean;
+  initialMode?: 'sign-in' | 'sign-up';
+  backLabel?: string;
   auth?: SupabaseAuthService | null;
   entitlements?: AccountEntitlementRepository;
   repository?: CloudResumeRepository;
@@ -33,6 +35,8 @@ const FREE_ENTITLEMENT: AccountEntitlement = {plan: 'free', premiumActive: false
 
 export function AccountPage({
   passwordRecovery = false,
+  initialMode = 'sign-in',
+  backLabel = 'Back to editor',
   auth = supabaseAuth,
   entitlements = accountEntitlementRepository,
   repository = supabaseResumeRepository,
@@ -92,7 +96,7 @@ export function AccountPage({
     <header className="border-b border-white/10 bg-black/90">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-6">
         <button type="button" className="focus-ring flex min-h-10 items-center gap-2 text-xs text-neutral-400 hover:text-white" onClick={onBack}>
-          <ArrowLeft size={15} />Back to editor
+          <ArrowLeft size={15} />{backLabel}
         </button>
         <div className="text-right"><p className="font-display text-sm font-semibold">CV Copilot</p><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Account</p></div>
       </div>
@@ -110,7 +114,7 @@ export function AccountPage({
         {authState.status === 'loading' && <Notice tone="neutral"><LoaderCircle className="animate-spin" size={14} />Checking your session…</Notice>}
         {authState.status === 'error' && <Notice tone="error">Could not check your session: {authState.error}</Notice>}
 
-        {authState.status === 'signed-out' && auth && !passwordRecovery && <AuthForms auth={auth} busy={busy} error={error} message={message} run={run} onMessage={setMessage} />}
+        {authState.status === 'signed-out' && auth && !passwordRecovery && <AuthForms initialMode={initialMode} auth={auth} busy={busy} error={error} message={message} run={run} onMessage={setMessage} />}
 
         {passwordRecovery && authState.status === 'signed-out' && <Notice tone="error">This password-reset session is missing or expired. Request a new reset link from the sign-in page.</Notice>}
 
@@ -162,8 +166,8 @@ export function AccountPage({
 
 type RunAction = (action: () => Promise<void> | void) => Promise<void>;
 
-function AuthForms({auth, busy, error, message, run, onMessage}: {auth: SupabaseAuthService; busy: boolean; error: string; message: string; run: RunAction; onMessage: (message: string) => void}) {
-  const [mode, setMode] = useState<'sign-in' | 'sign-up' | 'forgot'>('sign-in');
+function AuthForms({initialMode, auth, busy, error, message, run, onMessage}: {initialMode: 'sign-in' | 'sign-up'; auth: SupabaseAuthService; busy: boolean; error: string; message: string; run: RunAction; onMessage: (message: string) => void}) {
+  const [mode, setMode] = useState<'sign-in' | 'sign-up' | 'forgot'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 

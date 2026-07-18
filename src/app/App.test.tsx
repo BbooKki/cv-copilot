@@ -296,7 +296,24 @@ describe('landing page', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Sign in'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Create account'})).toBeInTheDocument();
     expect(screen.queryByRole('tab', {name: 'Tailor'})).not.toBeInTheDocument();
+  });
+
+  it('opens the requested account form from the landing page', async () => {
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Create account'}));
+    expect(await screen.findByRole('heading', {name: 'Create your account'})).toBeInTheDocument();
+    expect(screen.getByRole('tab', {name: 'Create account'})).toHaveAttribute('aria-selected', 'true');
+    expect(window.location.pathname).toBe('/account');
+    expect(window.location.search).toContain('mode=sign-up');
+
+    fireEvent.click(screen.getByRole('button', {name: 'Back to home'}));
+    expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
   });
 
   it('enters the editor from a call to action', async () => {
