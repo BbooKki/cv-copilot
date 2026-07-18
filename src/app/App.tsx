@@ -26,7 +26,6 @@ import {CvPreview} from '../templates/CvPreview';
 import {TemplatePicker} from '../templates/TemplatePicker';
 import {templateName} from '../templates/templateCatalog';
 import {STYLE_PRESETS} from '../templates/presets';
-import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
 import {AccountPage} from '../persistence/AccountPage';
 import {LandingPage} from '../landing/LandingPage';
@@ -567,7 +566,6 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             <div className="mt-3 flex flex-wrap gap-2">{STYLE_PRESETS.map(preset => { const active = document.settings.accentColor.toLowerCase() === preset.accentColor.toLowerCase() && document.settings.density === preset.density; return <button key={preset.id} className={`focus-ring flex items-center gap-2 border px-3 py-2 text-xs ${active ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-400 hover:border-white/30 hover:text-white'}`} onClick={() => updateSettings({accentColor: preset.accentColor, density: preset.density})}><span className="h-3 w-3 border border-white/20" style={{backgroundColor: preset.accentColor}} />{preset.name}</button>; })}</div>
           </section>
           {LOCAL_AI_ENABLED && <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />}
-          <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
         </div> : <div className="p-4 md:p-5">
           <div className="mb-3 grid grid-cols-2 border border-white/10 bg-white/[.015] p-1" role="tablist" aria-label="Tailor workspace">
             <button role="tab" aria-selected={tailorView === 'conversation'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'conversation' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('conversation')}>Conversation</button>

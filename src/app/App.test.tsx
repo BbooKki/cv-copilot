@@ -33,8 +33,6 @@ vi.mock('../persistence/localResumeRepository', () => ({
   localResumeRepository: {load: vi.fn().mockResolvedValue(null), save: vi.fn().mockResolvedValue(undefined)},
 }));
 
-vi.mock('../persistence/CloudPanel', () => ({CloudPanel: () => null}));
-
 const cloudHarness = vi.hoisted(() => ({analyze: vi.fn()}));
 vi.mock('../ai/cloudClient', () => ({analyzeWithCloud: (...args: unknown[]) => cloudHarness.analyze(...args)}));
 const interviewHarness = vi.hoisted(() => ({build: vi.fn()}));
