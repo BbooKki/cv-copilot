@@ -21,6 +21,11 @@ describe('company research', () => {
     expect(isExcludedSource({id: 'three', title: 'Acme Newsroom', url: 'https://acme.com/news'})).toBe(false);
   });
 
+  it('rejects malformed source URLs without leaking a URL parser exception', () => {
+    const raw = '{"summary":"Acme builds tooling.","priorities":[],"roleContext":""}';
+    expect(() => parseCompanyBrief(raw, [{id: 'source-0', title: 'Acme', url: 'not a url'}], claimsSupportedBy(raw, ['Acme builds tooling.']), 'Acme')).toThrow(/invalid url/i);
+  });
+
   it('parses a grounded brief and attaches only non-social sources', () => {
     const raw = '```json\n{"summary":"Acme builds accessible tooling.","priorities":["Ship v2","Expand APAC"],"roleContext":"Values accessible React work."}\n```';
     const brief = parseCompanyBrief(raw, [

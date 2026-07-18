@@ -12,6 +12,7 @@ describe('redactCvForCloud', () => {
     expect(redacted.basics.location).toBeUndefined();
     expect(redacted.basics.website).toBe('');
     expect(redacted.basics.links).toEqual([]);
+    expect(redacted.projects[0]?.url).toBe('');
   });
 
   it('preserves employment content and item IDs used for grounding', () => {
@@ -26,5 +27,11 @@ describe('redactCvForCloud', () => {
     redactCvForCloud(testCv);
     expect(testCv.basics.fullName).toBe('Alex Morgan');
     expect(testCv.basics.links).toHaveLength(1);
+    expect(testCv.projects[0]?.url).toBeUndefined();
+  });
+
+  it('removes malformed project URLs that are irrelevant to analysis', () => {
+    const document = {...testCv, projects: [{...testCv.projects[0], url: 'not a url'}]};
+    expect(redactCvForCloud(document).projects[0]?.url).toBe('');
   });
 });

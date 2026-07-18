@@ -26,7 +26,9 @@ describe('generateText', () => {
     expect(String(url)).toContain(':generateContent');
     expect((init as RequestInit).headers).toMatchObject({'x-goog-api-key': 'test-key'});
     expect(String(url)).not.toContain('test-key');
-    expect(JSON.parse(String((init as RequestInit).body)).generationConfig.responseMimeType).toBe('application/json');
+    const generationConfig = JSON.parse(String((init as RequestInit).body)).generationConfig;
+    expect(generationConfig.responseMimeType).toBe('application/json');
+    expect(generationConfig.thinkingConfig).toEqual({thinkingLevel: 'low'});
   });
 
   it('fails fast when the key is missing', async () => {

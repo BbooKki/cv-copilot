@@ -2,7 +2,13 @@ import {z} from 'zod';
 
 const id = z.string().trim().min(1);
 const optionalText = z.string().trim().optional();
-const safeUrl = z.string().trim().url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol), 'Only HTTP(S) URLs are allowed.');
+const safeUrl = z.string().trim().url().refine(value => {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}, 'Only HTTP(S) URLs are allowed.');
 
 const draftText = z.string().trim();
 const highlightSchema = z.object({id, text: draftText}).strict();
