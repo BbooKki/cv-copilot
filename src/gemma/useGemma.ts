@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {LOCAL_AI_ENABLED} from './config';
 import {GEMMA_MODEL_BYTES, GEMMA_MODEL_URL, GEMMA_STORAGE_HEADROOM_BYTES, type GemmaGenerationKind, type GemmaGenerationPhase, type GemmaGenerationRequestId, type GemmaToMainMessage, type MainToGemmaMessage} from './protocol';
 
 export type GemmaStatus = 'disabled' | 'unsupported' | 'idle' | 'downloading' | 'initializing' | 'ready' | 'generating' | 'error';
@@ -34,7 +35,7 @@ export function useGemma(onComplete: (raw: string) => void, onGenerationTimeout:
   useEffect(() => { onGenerationTimeoutRef.current = onGenerationTimeout; }, [onGenerationTimeout]);
 
   useEffect(() => {
-    if (import.meta.env.VITE_GEMMA_ENABLED === 'false') { setStatus('disabled'); return; }
+    if (!LOCAL_AI_ENABLED) { setStatus('disabled'); return; }
     let active = true;
     const clearInitializationTimer = () => {
       if (initializationTimerRef.current !== undefined) window.clearTimeout(initializationTimerRef.current);

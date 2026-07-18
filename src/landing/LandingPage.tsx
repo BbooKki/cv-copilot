@@ -1,17 +1,19 @@
 import {ArrowRight, Check, Cpu, Download, Globe, Lock, Mic, ScanSearch, ShieldCheck, Sparkles} from 'lucide-react';
+import {LOCAL_AI_ENABLED} from '../gemma/config';
 
 type LandingPageProps = {
   onStart: () => void;
+  onPricing: () => void;
   onSignIn: () => void;
   onSignUp: () => void;
 };
 
 const FEATURES = [
-  {
+  ...(LOCAL_AI_ENABLED ? [{
     icon: Cpu,
     title: 'Private on-device mode',
     body: 'Run the whole analysis locally in your browser with WebGPU. In Private Mode nothing leaves your device — no upload, no account, no trace.',
-  },
+  }] : []),
   {
     icon: ShieldCheck,
     title: 'Truthful, grounded edits',
@@ -53,30 +55,33 @@ const FAQ = [
   },
   {
     q: 'What actually gets sent to the cloud?',
-    a: 'In the recommended cloud path, your name, email, phone, location, and links are stripped before employment content and job text are sent. Private Mode sends nothing at all — the model runs on your device.',
+    a: LOCAL_AI_ENABLED
+      ? 'In the recommended cloud path, your name, email, phone, location, and links are stripped before employment content and job text are sent. Private Mode sends nothing at all — the model runs on your device.'
+      : 'Your name, email, phone, location, and links are stripped before employment content and job text are sent for analysis. Cloud saving remains a separate, explicit action.',
   },
   {
     q: 'Will it make things up to improve my CV?',
     a: 'No. Suggestions must be grounded in evidence already present in your CV. Anything that cannot be verified is rejected rather than guessed.',
   },
-  {
+  ...(LOCAL_AI_ENABLED ? [{
     q: 'What do I need for Private Mode?',
     a: 'A WebGPU-capable browser such as recent Chrome or Edge. The on-device model downloads once (about 2 GB) only after you explicitly activate it, then stays cached locally.',
-  },
+  }] : []),
 ] as const;
 
 function Eyebrow({children}: {children: React.ReactNode}) {
   return <p className="font-mono text-[10px] uppercase tracking-[.22em] text-neutral-500">{children}</p>;
 }
 
-export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
+export function LandingPage({onStart, onPricing, onSignIn, onSignUp}: LandingPageProps) {
   return <main className="min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <p className="hidden font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600 sm:block">Private · Truthful · Grounded</p>
+        <p className="hidden font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600 sm:block">Truthful · Grounded · User approved</p>
         <nav className="flex items-center gap-2" aria-label="Primary">
           <a href="#features" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">Features</a>
           <a href="#how" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">How it works</a>
+          <button type="button" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white md:inline-block" onClick={onPricing}>Pricing</button>
           <button type="button" className="focus-ring min-h-10 whitespace-nowrap px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={onSignIn}>Sign in</button>
           <button type="button" className="focus-ring flex min-h-10 items-center gap-1.5 whitespace-nowrap bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onSignUp}>Create account<ArrowRight size={14} /></button>
         </nav>
@@ -86,12 +91,12 @@ export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
     <section className="app-grid border-b border-white/10" aria-labelledby="hero-title">
       <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
         <div className="max-w-3xl">
-          <Eyebrow>Private on-device AI · No account required</Eyebrow>
+          <Eyebrow>{LOCAL_AI_ENABLED ? 'Private on-device AI · No account required' : 'Grounded CV tailoring · No account required'}</Eyebrow>
           <h1 id="hero-title" className="mt-5 font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
             Tailor your CV to any job — <span className="text-neutral-400">without inventing a word.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-7 text-neutral-400 md:text-lg">
-            CV Copilot compares your real experience against a job posting, proposes edits grounded in what you actually did, and lets you run the whole thing privately on your own device. You approve every change.
+            CV Copilot compares your real experience against a job posting and proposes edits grounded in what you actually did. Your contact details are removed before analysis, and you approve every change.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
             <button className="focus-ring flex items-center justify-center gap-2 bg-white px-6 py-3.5 text-sm font-semibold text-black hover:bg-neutral-200" onClick={onStart}>
@@ -102,7 +107,7 @@ export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
             </a>
           </div>
           <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2">
-            {['Works without signing in', 'Nothing invented', 'Runs on-device in Private Mode'].map(point =>
+            {['Works without signing in', 'Nothing invented', LOCAL_AI_ENABLED ? 'Runs on-device in Private Mode' : 'Contact details removed before analysis'].map(point =>
               <li key={point} className="flex items-center gap-2 text-xs text-neutral-500"><Check size={14} className="text-neutral-300" />{point}</li>)}
           </ul>
         </div>
@@ -148,13 +153,15 @@ export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
           <Eyebrow>Privacy model</Eyebrow>
           <h2 id="privacy-title" className="mt-4 font-display text-3xl font-semibold tracking-tight md:text-4xl">Your CV stays yours</h2>
           <p className="mt-6 max-w-xl text-base leading-7 text-neutral-400">
-            The app works entirely without an account. Choose the fast cloud path and your name and contact details are removed before anything is sent — or choose Private Mode and run the model on your own device, where nothing is transmitted at all. Cloud saving is always a separate, explicit choice.
+            {LOCAL_AI_ENABLED
+              ? 'The app works entirely without an account. Choose the fast cloud path and your name and contact details are removed before anything is sent — or choose Private Mode and run the model on your own device, where nothing is transmitted at all. Cloud saving is always a separate, explicit choice.'
+              : 'The app works entirely without an account. Your name and contact details are removed before employment content and job text are sent for analysis. Cloud saving is always a separate, explicit choice.'}
           </p>
         </div>
         <ul className="grid gap-px self-start border border-white/10 bg-white/10">
           {[
             {icon: Lock, text: 'Name, email, phone, location, and links are stripped before cloud analysis.'},
-            {icon: Cpu, text: 'Private Mode runs on-device with WebGPU — zero network calls for inference.'},
+            ...(LOCAL_AI_ENABLED ? [{icon: Cpu, text: 'Private Mode runs on-device with WebGPU — zero network calls for inference.'}] : []),
             {icon: ShieldCheck, text: 'Company research receives only public role and company details, never your CV.'},
           ].map(({icon: Icon, text}) =>
             <li key={text} className="flex items-start gap-3 bg-black p-5">
@@ -196,10 +203,10 @@ export function LandingPage({onStart, onSignIn, onSignUp}: LandingPageProps) {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 md:flex-row md:px-6">
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 items-center border border-white/20 px-2">
-            <img src="/CVcopilot.svg" alt="CV Copilot" className="h-4 w-auto" />
+            <img src="/logo.png" alt="CV Copilot" className="h-4 w-auto" />
           </div>
         </div>
-        <p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private on-device AI · No account required</p>
+        <p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Grounded CV tailoring · No account required</p>
       </div>
     </footer>
   </main>;

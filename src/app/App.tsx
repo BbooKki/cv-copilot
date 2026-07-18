@@ -18,6 +18,7 @@ import {createBlankCv, hasCvContent} from '../cv/blank';
 import {CvEditor} from '../editor/CvEditor';
 import {readField, writeField, fieldLabel, type CvFieldTarget} from '../editor/fieldTargets';
 import {GEMMA_MODEL_BYTES, GEMMA_STORAGE_HEADROOM_BYTES, type GemmaGenerationKind, type GemmaGenerationPhase} from '../gemma/protocol';
+import {LOCAL_AI_ENABLED} from '../gemma/config';
 import {useGemma} from '../gemma/useGemma';
 import {extractJob} from '../jobs/client';
 import {localResumeRepository} from '../persistence/localResumeRepository';
@@ -29,6 +30,7 @@ import {CloudPanel} from '../persistence/CloudPanel';
 import {AccountMenu} from '../persistence/AccountMenu';
 import {AccountPage} from '../persistence/AccountPage';
 import {LandingPage} from '../landing/LandingPage';
+import {PricingPage} from '../pricing/PricingPage';
 import {ApplicationKit} from './ApplicationKit';
 import {ContactStrategyCard} from './ContactStrategyCard';
 
@@ -56,9 +58,14 @@ export function App() {
   if (route === 'landing') {
     return <LandingPage
       onStart={() => navigate('/app')}
+      onPricing={() => navigate('/pricing')}
       onSignIn={() => navigate('/account?mode=sign-in&from=landing')}
       onSignUp={() => navigate('/account?mode=sign-up&from=landing')}
     />;
+  }
+
+  if (route === 'pricing') {
+    return <PricingPage onBack={() => navigate('/')} onStart={() => navigate('/app')} />;
   }
 
   if (route !== 'workspace') {
@@ -522,7 +529,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   return <main className="app-grid min-h-screen bg-black text-white">
     <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <div className="min-w-0"><h1 className="sr-only">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Cloud AI · Private mode · Truthful edits</p></div>
+        <div className="min-w-0"><h1 className="sr-only">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">{LOCAL_AI_ENABLED ? 'Cloud AI · Private mode · Truthful edits' : 'Cloud AI · Truthful edits · User approved'}</p></div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 md:flex"><StatusPill icon={<HardDrive size={12} />} label={saveState === 'saving' ? 'Saving locally' : saveState === 'error' ? 'Save failed' : 'Saved locally'} tone={saveState === 'error' ? 'error' : 'neutral'} />
             <button className="focus-ring border border-white/10 px-3 py-2 text-xs text-neutral-400 hover:border-white/30 hover:text-white disabled:opacity-30" onClick={undo} disabled={!undoStack.length}><RotateCcw size={14} className="mr-1 inline" />Undo</button>
@@ -552,14 +559,14 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
 
         {copilotMode === 'edit' ? <div className="space-y-5 p-4 md:p-5">
           <div className="mb-5 flex items-start gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center border border-white/15 bg-white text-black"><Bot size={15} /></div><div className="max-w-[90%] border border-white/10 bg-white/[.04] p-3 text-sm leading-6 text-neutral-300">Add your real details below. I’ll keep the document preview updated as you type.</div></div>
+          <CvEditor document={document} onChange={updateDocument} />
           <TemplatePicker settings={document.settings} onTemplateChange={templateId => updateSettings({templateId})} onDensityChange={density => updateSettings({density})} onPageSizeChange={pageSize => updateSettings({pageSize})} onAccentChange={accentColor => updateSettings({accentColor})} />
           <section className="border border-white/10 bg-white/[.02] p-4" aria-labelledby="presets-title">
             <p id="presets-title" className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Style presets</p>
             <p className="mt-1 text-xs leading-5 text-neutral-500">One-click tested accent and density combinations.</p>
             <div className="mt-3 flex flex-wrap gap-2">{STYLE_PRESETS.map(preset => { const active = document.settings.accentColor.toLowerCase() === preset.accentColor.toLowerCase() && document.settings.density === preset.density; return <button key={preset.id} className={`focus-ring flex items-center gap-2 border px-3 py-2 text-xs ${active ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-400 hover:border-white/30 hover:text-white'}`} onClick={() => updateSettings({accentColor: preset.accentColor, density: preset.density})}><span className="h-3 w-3 border border-white/20" style={{backgroundColor: preset.accentColor}} />{preset.name}</button>; })}</div>
           </section>
-          <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />
-          <CvEditor document={document} onChange={updateDocument} />
+          {LOCAL_AI_ENABLED && <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />}
           <CloudPanel document={document} onLoad={updateDocument} onOpenAccount={onOpenAccount} />
         </div> : <div className="p-4 md:p-5">
           <div className="mb-3 grid grid-cols-2 border border-white/10 bg-white/[.015] p-1" role="tablist" aria-label="Tailor workspace">
@@ -573,10 +580,10 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
                 <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${cloudBusy || extracting || gemma.status === 'generating' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><h3 className="text-sm font-semibold">Tailor conversation</h3></div>
                 <p className="mt-1 pl-4 font-mono text-[8px] uppercase tracking-[.14em] text-neutral-600">{aiMode === 'cloud' ? 'Fast analysis · contact details removed' : 'Private analysis · stays on this device'}</p>
               </div>
-              <div className="flex rounded-full border border-white/10 bg-black p-0.5" role="tablist" aria-label="AI engine">
+              {LOCAL_AI_ENABLED && <div className="flex rounded-full border border-white/10 bg-black p-0.5" role="tablist" aria-label="AI engine">
                 <button role="tab" aria-label="Cloud" aria-selected={aiMode === 'cloud'} className={`focus-ring rounded-full px-3 py-1.5 text-[10px] ${aiMode === 'cloud' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('cloud')}><WandSparkles size={12} className="mr-1 inline" />Cloud</button>
                 <button role="tab" aria-label="Private · Local" aria-selected={aiMode === 'local'} className={`focus-ring rounded-full px-3 py-1.5 text-[10px] ${aiMode === 'local' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setAiMode('local')}><HardDrive size={12} className="mr-1 inline" />Private</button>
-              </div>
+              </div>}
             </div>
 
             <div className="max-h-[min(56vh,620px)] min-h-[320px] space-y-4 overflow-y-auto px-4 py-5 lg:h-[clamp(200px,calc(100vh-480px),620px)] lg:min-h-0" aria-live="polite">
@@ -589,7 +596,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
 
               {showConsent && <AssistantAction title="Before I send this" icon={<WandSparkles size={13} />}>
                 <p>Your work history and the job description go to the cloud AI provider. Your name and contact details are removed first.</p>
-                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); setAiMode('local'); }}>Keep it private</button></div>
+                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); if (LOCAL_AI_ENABLED) setAiMode('local'); }}>{LOCAL_AI_ENABLED ? 'Keep it private' : 'Not now'}</button></div>
               </AssistantAction>}
 
               {aiMode === 'cloud' && !analysis && jobText.trim().length >= 40 && !cloudBusy && <AssistantAction title="Ready to compare" icon={<WandSparkles size={13} />}>
@@ -598,7 +605,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
                 {!cvHasContent && <p className="mt-2 text-[10px] text-neutral-600">Add some CV content first so I have evidence to compare.</p>}
               </AssistantAction>}
 
-              {aiMode === 'local' && <AssistantAction title="Private mode" icon={<HardDrive size={13} />}>
+              {LOCAL_AI_ENABLED && aiMode === 'local' && <AssistantAction title="Private mode" icon={<HardDrive size={13} />}>
                 <p>{gemma.status === 'ready' ? 'The local model is ready. Nothing in this comparison leaves your device.' : `This mode uses a one-time ${formatBytes(GEMMA_MODEL_BYTES)} model download and WebGPU.`}</p>
                 <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring inline-flex items-center gap-2 bg-white px-3 py-2.5 text-xs font-semibold text-black disabled:opacity-30" disabled={!['idle', 'error'].includes(gemma.status)} onClick={gemma.load}><HardDrive size={14} />{gemma.cached ? 'Load cached model' : 'Download local model'}</button><button className="focus-ring inline-flex items-center gap-2 border border-white/15 px-3 py-2.5 text-xs disabled:opacity-30" disabled={gemma.status !== 'ready' || activeStage !== null || jobText.trim().length < 40 || !cvHasContent} onClick={() => runLocalAnalysis()}>{activeStage && activeStage !== 'design' ? <LoaderCircle className="animate-spin" size={14} /> : <WandSparkles size={14} />}{analysisActionLabel}</button>{gemma.status === 'generating' && <button className="focus-ring inline-flex items-center gap-2 border border-white/15 px-3 py-2.5 text-xs" onClick={cancelGeneration}><Square size={12} fill="currentColor" />Stop</button>}</div>
                 {['downloading', 'initializing'].includes(gemma.status) && <div className="mt-3"><div className="flex justify-between font-mono text-[9px] text-neutral-500"><span>{gemma.status === 'initializing' ? 'INITIALIZING GPU' : 'DOWNLOADING ONCE'}</span><span>{progress.toFixed(1)}%</span></div><div className="mt-2 h-1 bg-white/10"><div className="h-full bg-white transition-[width]" style={{width: `${gemma.status === 'initializing' ? 100 : progress}%`}} /></div><button className="mt-2 text-[10px] text-neutral-500 hover:text-white" onClick={gemma.cancel}>Cancel</button></div>}
@@ -667,14 +674,15 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
   </main>;
 }
 
-function appRoute(pathname: string): 'landing' | 'workspace' | 'account' | 'password-recovery' {
+function appRoute(pathname: string): 'landing' | 'pricing' | 'workspace' | 'account' | 'password-recovery' {
   if (pathname === '/account/reset-password') return 'password-recovery';
   if (pathname === '/account') return 'account';
+  if (pathname === '/pricing') return 'pricing';
   if (pathname === '/app') return 'workspace';
   return 'landing';
 }
 
-type AppPath = '/' | '/app' | '/account' | '/account/reset-password' | `/account?${string}`;
+type AppPath = '/' | '/pricing' | '/app' | '/account' | '/account/reset-password' | `/account?${string}`;
 
 function accountMode(search: string): 'sign-in' | 'sign-up' {
   return new URLSearchParams(search).get('mode') === 'sign-up' ? 'sign-up' : 'sign-in';
