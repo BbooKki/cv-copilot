@@ -8,34 +8,34 @@ type PricingPageProps = {
 const PACKS = [
   {
     name: 'Free',
-    eyebrow: 'Try the full workflow',
-    price: '$0',
+    eyebrow: 'For your first test',
+    price: '₩0',
     unit: 'No card required',
-    credits: '1 tailoring credit',
-    description: 'Build your CV and tailor it to one real role before deciding if you need more.',
-    features: ['Unlimited manual editing', 'One job-specific AI tailoring run', 'PDF exports and re-downloads'],
+    credits: '3 tailoring credits',
+    description: 'Try the complete CV tailoring workflow with three credits before choosing a paid plan.',
+    features: ['Unlimited manual editing', 'Three job-specific AI tailoring runs', 'PDF exports and re-downloads'],
     featured: false,
     available: true,
   },
   {
-    name: 'Starter',
-    eyebrow: 'For a focused application',
-    price: '$5',
+    name: 'Credits',
+    eyebrow: 'Pay once, use when needed',
+    price: '₩10,000',
     unit: 'One-time purchase',
-    credits: '5 tailoring credits',
-    description: 'A small pack for testing several roles without another monthly subscription.',
-    features: ['Everything in Free', 'Five job-specific tailoring runs', 'No recurring monthly fee'],
+    credits: '10 tailoring credits',
+    description: 'A flexible credit pack for tailoring your CV to several roles without a subscription.',
+    features: ['Everything in Free', 'Ten job-specific tailoring runs', 'No recurring monthly fee'],
     featured: false,
     available: false,
   },
   {
-    name: 'Job Hunt',
+    name: 'Pro',
     eyebrow: 'For an active job search',
-    price: '$12',
-    unit: 'One-time purchase',
-    credits: '20 tailoring credits',
-    description: 'Built for an active search across multiple companies, roles, and CV versions.',
-    features: ['Everything in Free', 'Twenty job-specific tailoring runs', '60% lower cost per tailoring'],
+    price: '₩22,000',
+    unit: 'Per month',
+    credits: '30 tailoring credits / month',
+    description: 'A monthly plan for an active job search across multiple companies, roles, and CV versions.',
+    features: ['Everything in Free', 'Thirty tailoring credits each month', 'Best value for an ongoing search'],
     featured: true,
     available: false,
   },
@@ -61,10 +61,10 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
           <p className="font-mono text-[9px] uppercase tracking-[.16em]">Preview pricing · Paid packs coming after MVP</p>
         </div>
         <h1 id="pricing-title" className="mt-6 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
-          Pay for the tailoring you use. <span className="text-neutral-500">Keep your CV forever.</span>
+          Start free, then choose what fits. <span className="text-neutral-500">Credits or Pro.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-7 text-neutral-400 md:text-lg">
-          Job searches are intense, then they end. Credit packs fit that rhythm better than a subscription—and manual editing and PDF exports stay free.
+          Test the full workflow with three free credits, buy a one-time pack when you need flexibility, or choose Pro for a focused monthly job search.
         </p>
       </div>
     </section>
@@ -78,7 +78,7 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
             <h2 className="mt-3 font-display text-2xl font-semibold">{pack.name}</h2>
             <div className="mt-7 flex items-end gap-2">
               <span className="font-display text-5xl font-semibold tracking-tight">{pack.price}</span>
-              <span className="pb-1 text-xs text-neutral-500">USD</span>
+              <span className="pb-1 text-xs text-neutral-500">KRW</span>
             </div>
             <p className="mt-2 font-mono text-[9px] uppercase tracking-wider text-neutral-600">{pack.unit}</p>
             <div className="mt-6 border-y border-white/10 py-4">
@@ -89,7 +89,7 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
               {pack.features.map(feature => <li key={feature} className="flex items-start gap-2.5 text-xs leading-5 text-neutral-400"><Check className="mt-0.5 shrink-0 text-neutral-300" size={14} />{feature}</li>)}
             </ul>
             {pack.available
-              ? <button type="button" className="focus-ring mt-7 flex min-h-11 w-full items-center justify-center gap-2 bg-white px-4 py-3 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onStart}><Sparkles size={14} />Start with 1 free credit</button>
+              ? <button type="button" className="focus-ring mt-7 flex min-h-11 w-full items-center justify-center gap-2 bg-white px-4 py-3 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onStart}><Sparkles size={14} />Start with 3 free credits</button>
               : <button type="button" disabled className="mt-7 min-h-11 w-full border border-white/10 bg-white/[.03] px-4 py-3 text-xs text-neutral-500">Coming soon</button>}
           </article>)}
         </div>

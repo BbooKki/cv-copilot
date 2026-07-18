@@ -7,13 +7,16 @@ describe('PricingPage', () => {
     const onStart = vi.fn();
     render(<PricingPage onBack={vi.fn()} onStart={onStart} />);
 
-    expect(screen.getByRole('heading', {name: /Pay for the tailoring you use/})).toBeInTheDocument();
-    expect(screen.getByText('5 tailoring credits')).toBeInTheDocument();
-    expect(screen.getByText('20 tailoring credits')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: /Start free, then choose what fits/})).toBeInTheDocument();
+    expect(screen.getByText('3 tailoring credits')).toBeInTheDocument();
+    expect(screen.getByText('10 tailoring credits')).toBeInTheDocument();
+    expect(screen.getByText('30 tailoring credits / month')).toBeInTheDocument();
+    expect(screen.getByText('₩10,000')).toBeInTheDocument();
+    expect(screen.getByText('₩22,000')).toBeInTheDocument();
     expect(screen.getByText(/Checkout and payment collection are not enabled/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', {name: 'Coming soon'})).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', {name: /Start with 1 free credit/}));
+    fireEvent.click(screen.getByRole('button', {name: /Start with 3 free credits/}));
     expect(onStart).toHaveBeenCalledOnce();
   });
 });
