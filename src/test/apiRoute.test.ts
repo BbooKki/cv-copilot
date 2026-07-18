@@ -1,6 +1,7 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import handler from '../../api/ai';
+import {testCv} from '../cv/testFixture';
 
 const originalEnabled = process.env.CLOUD_AI_ENABLED;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
@@ -88,7 +89,70 @@ describe('/api/ai safeguards', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(JSON.parse(response.body()).summary.text).toBe('Acme builds accessible tools.');
   });
+
+  it('uses separate provider responses for fit analysis and grounded suggestions', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(geminiResponse(JSON.stringify({
+        protocolVersion: 1,
+        fitSummary: 'The CV provides relevant product delivery evidence.',
+        matchedRequirements: [{requirement: 'Product delivery', evidence: 'Led customer-facing workflow tools.', cvItemId: 'exp-northstar'}],
+        gaps: [],
+      })))
+      .mockResolvedValueOnce(geminiResponse(JSON.stringify({protocolVersion: 1, suggestions: []})));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(analyzeBody(), 'analysis-split-client'), response.value);
+
+    expect(response.status()).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(response.body())).toMatchObject({
+      fitSummary: 'The CV provides relevant product delivery evidence.',
+      suggestions: [],
+    });
+  });
+
+  it('keeps valid fit results when both suggestion responses are unusable', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(geminiResponse(JSON.stringify({
+        protocolVersion: 1,
+        fitSummary: 'The CV provides relevant product delivery evidence.',
+        matchedRequirements: [],
+        gaps: [{requirement: 'Python', explanation: 'Python is not present in the CV.', resolvableFromExistingFacts: false}],
+      })))
+      .mockResolvedValueOnce(geminiResponse('{"protocolVersion":1,"suggestions":['))
+      .mockResolvedValueOnce(geminiResponse('{"protocolVersion":1,"suggestions":['));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(analyzeBody(), 'analysis-suggestion-fallback-client'), response.value);
+
+    expect(response.status()).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(response.body())).toMatchObject({
+      fitSummary: 'The CV provides relevant product delivery evidence.',
+      suggestions: [],
+      warnings: ['Fit analysis is ready, but no grounded CV edit could be generated.'],
+    });
+  });
 });
+
+function analyzeBody(): string {
+  return JSON.stringify({
+    operation: 'analyze',
+    request: {
+      protocolVersion: 1,
+      cv: testCv,
+      job: {source: 'pasted', title: 'Frontend Engineer', company: 'Acme', text: 'Build accessible product experiences and maintain production systems.'},
+      options: {maxSuggestions: 1, language: 'en'},
+    },
+  });
+}
 
 function geminiResponse(text: string): Response {
   return new Response(JSON.stringify({candidates: [{content: {parts: [{text}]}}]}), {status: 200, headers: {'content-type': 'application/json'}});

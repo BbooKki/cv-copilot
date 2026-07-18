@@ -4,7 +4,7 @@ import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendatio
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
 import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisResult, type AiAnalysisRequest, type AiFitAnalysisResult} from '../ai/protocol';
-import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument, validateSuggestionTarget} from '../ai/suggestions';
+import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument, validateSuggestionTarget} from '../ai/suggestions';
 import {analyzeWithCloud} from '../ai/cloudClient';
 import {researchCompany} from '../ai/researchClient';
 import type {GroundedCompanyBrief} from '../ai/research';
@@ -173,6 +173,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
         const parsed = parseSuggestionResult(raw);
         const suggestions = {...parsed, suggestions: bindSuggestionsToDocument(request.cv, parsed.suggestions)};
         assertSuggestionsAreGrounded(request.cv, suggestions.suggestions);
+        assertSuggestionsDoNotClaimGaps(request.cv, fit, suggestions.suggestions);
         setAnalysis(combineAnalysis(fit, suggestions));
         setHandledSuggestions({});
         setAnalysisError('');
@@ -325,6 +326,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       const result = await analyzeWithCloud(request);
       assertFitEvidenceExists(document, result);
       assertSuggestionsAreGrounded(document, result.suggestions);
+      assertSuggestionsDoNotClaimGaps(document, result, result.suggestions);
       setAnalysis(result);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Cloud analysis failed.';

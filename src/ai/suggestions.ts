@@ -52,6 +52,27 @@ export function assertSuggestionsAreGrounded(document: CvDocument, suggestions: 
   }
 }
 
+const GAP_TERM_STOP_WORDS = new Set(['a', 'an', 'and', 'ability', 'experience', 'familiarity', 'for', 'framework', 'frameworks', 'in', 'knowledge', 'of', 'or', 'preferred', 'proficiency', 'required', 'skill', 'skills', 'strong', 'the', 'to', 'understanding', 'using', 'with', 'year', 'years']);
+
+/** Rejects edits that turn a job requirement reported as missing into a new CV claim. */
+export function assertSuggestionsDoNotClaimGaps(document: CvDocument, fit: AiFitAnalysisResult, suggestions: AiSuggestion[]): void {
+  const cvText = JSON.stringify(document).toLowerCase();
+  for (const gap of fit.gaps) {
+    const missingTerms = (gap.requirement.match(/[a-z][a-z0-9.+#-]*/gi) ?? [])
+      .map(term => term.toLowerCase())
+      .filter(term => term.length >= 2 && !GAP_TERM_STOP_WORDS.has(term) && !containsTerm(cvText, term));
+    for (const suggestion of suggestions) {
+      const introduced = missingTerms.find(term => containsTerm(suggestion.proposedText.toLowerCase(), term));
+      if (introduced) throw new Error(`Suggestion ${suggestion.id} attempts to add missing requirement ${introduced}.`);
+    }
+  }
+}
+
+function containsTerm(value: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(value);
+}
+
 export function assertFitEvidenceExists(document: CvDocument, fit: AiFitAnalysisResult): void {
   const knownIds = collectEvidenceIds(document);
   for (const match of fit.matchedRequirements) {

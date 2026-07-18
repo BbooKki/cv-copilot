@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {testCv} from '../cv/testFixture';
-import type {AiSuggestion} from './protocol';
-import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument, validateSuggestionTarget} from './suggestions';
+import type {AiFitAnalysisResult, AiSuggestion} from './protocol';
+import {applySuggestion, assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument, validateSuggestionTarget} from './suggestions';
 
 function testSuggestion(): AiSuggestion {
   const experience = testCv.experience[0];
@@ -73,5 +73,31 @@ describe('suggestion workflow', () => {
       gaps: [],
       warnings: [],
     })).toThrow(/unknown CV item/i);
+  });
+
+  it('rejects an edit that turns a reported skill gap into a CV claim', () => {
+    const fit: AiFitAnalysisResult = {
+      protocolVersion: 1,
+      fitSummary: 'The role requires an unverified skill.',
+      matchedRequirements: [],
+      gaps: [{requirement: 'Python', explanation: 'Python is not present in the CV.', resolvableFromExistingFacts: false}],
+      warnings: [],
+    };
+    const inventedSkill = testSuggestion();
+    inventedSkill.proposedText = 'Led Python development and operation of three customer-facing workflow tools.';
+
+    expect(() => assertSuggestionsDoNotClaimGaps(testCv, fit, [inventedSkill])).toThrow(/missing requirement python/i);
+  });
+
+  it('allows a grounded rephrase that does not claim a reported gap', () => {
+    const fit: AiFitAnalysisResult = {
+      protocolVersion: 1,
+      fitSummary: 'The role requires an unverified skill.',
+      matchedRequirements: [],
+      gaps: [{requirement: 'Python', explanation: 'Python is not present in the CV.', resolvableFromExistingFacts: false}],
+      warnings: [],
+    };
+
+    expect(() => assertSuggestionsDoNotClaimGaps(testCv, fit, [testSuggestion()])).not.toThrow();
   });
 });

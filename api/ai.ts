@@ -2,11 +2,11 @@ import type {IncomingMessage, ServerResponse} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
-import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
+import {buildFitAnalysisPrompt, buildSuggestionPrompt, combineAnalysis, parseFitAnalysisResult, parseSuggestionResult, type AiAnalysisRequest, type AiAnalysisResult, type AiFitAnalysisResult, type AiSuggestionResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
-import {assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
+import {assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
 import {generateGrounded, generateText, GEMINI_MODEL, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
@@ -14,7 +14,8 @@ export const config = {maxDuration: 60};
 
 // Tight operation-specific ceilings protect the free-tier quota while leaving
 // enough room for the validated response schemas.
-const ANALYSIS_MAX_TOKENS = 2_400;
+const ANALYSIS_MAX_TOKENS = 900;
+const ANALYSIS_REPAIR_MAX_TOKENS = 520;
 const RESEARCH_MAX_TOKENS = 1_600;
 const INTERVIEW_MAX_TOKENS = 1_800;
 
@@ -121,27 +122,57 @@ export default async function handler(request: IncomingMessage, response: Server
 
 async function analyze(request: AiAnalysisRequest): Promise<AiAnalysisResult> {
   const safeRequest = {...request, cv: redactCvForCloud(request.cv)};
-  const prompt = buildCloudAnalysisPrompt(safeRequest);
-  const raw = await generateText(prompt, {json: true, temperature: 0.2, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+  const fit = await generateCloudFit(safeRequest);
   try {
-    return parseAndGroundAnalysis(raw, safeRequest);
-  } catch {
-    const repairPrompt = `${prompt}\n\nThe previous response was not valid JSON for the schema. Return only the corrected minified JSON with every array and object closed.`;
-    const retry = await generateText(repairPrompt, {json: true, temperature: 0, maxOutputTokens: ANALYSIS_MAX_TOKENS});
+    const suggestions = await generateCloudSuggestions(safeRequest, fit);
+    return combineAnalysis(fit, suggestions);
+  } catch (cause) {
+    logInvalidAnalysisStage('suggestions', cause);
+    return {...combineAnalysis(fit, {protocolVersion: 1, suggestions: []}), warnings: [...fit.warnings, 'Fit analysis is ready, but no grounded CV edit could be generated.'].slice(0, 3)};
+  }
+}
+
+async function generateCloudFit(request: AiAnalysisRequest): Promise<AiFitAnalysisResult> {
+  const parse = (raw: string) => {
+    const fit = parseFitAnalysisResult(raw);
+    assertFitEvidenceExists(request.cv, fit);
+    return fit;
+  };
+  try {
+    return parse(await generateText(buildFitAnalysisPrompt(request), {json: true, temperature: 0.1, maxOutputTokens: ANALYSIS_MAX_TOKENS}));
+  } catch (firstCause) {
+    logInvalidAnalysisStage('fit-initial', firstCause);
     try {
-      return parseAndGroundAnalysis(retry, safeRequest);
-    } catch {
-      throw new GeminiError('invalid-output', 'The AI returned an unusable response. Please try again.', 502);
+      return parse(await generateText(buildFitAnalysisPrompt(request, {repair: true}), {json: true, temperature: 0, maxOutputTokens: ANALYSIS_REPAIR_MAX_TOKENS}));
+    } catch (repairCause) {
+      logInvalidAnalysisStage('fit-repair', repairCause);
+      throw new GeminiError('invalid-output', 'The AI returned an unusable fit analysis. Please try again.', 502);
     }
   }
 }
 
-function parseAndGroundAnalysis(raw: string, request: AiAnalysisRequest): AiAnalysisResult {
-  const parsed = parseAiResult(raw);
-  assertFitEvidenceExists(request.cv, parsed);
-  const suggestions = bindSuggestionsToDocument(request.cv, parsed.suggestions);
-  assertSuggestionsAreGrounded(request.cv, suggestions);
-  return {...parsed, suggestions};
+async function generateCloudSuggestions(request: AiAnalysisRequest, fit: AiFitAnalysisResult): Promise<AiSuggestionResult> {
+  const parse = (raw: string) => {
+    const parsed = parseSuggestionResult(raw);
+    const suggestions = bindSuggestionsToDocument(request.cv, parsed.suggestions);
+    assertSuggestionsAreGrounded(request.cv, suggestions);
+    assertSuggestionsDoNotClaimGaps(request.cv, fit, suggestions);
+    return {...parsed, suggestions};
+  };
+  try {
+    return parse(await generateText(buildSuggestionPrompt(request, fit), {json: true, temperature: 0.1, maxOutputTokens: ANALYSIS_MAX_TOKENS}));
+  } catch (firstCause) {
+    logInvalidAnalysisStage('suggestions-initial', firstCause);
+    return parse(await generateText(buildSuggestionPrompt(request, fit, {repair: true}), {json: true, temperature: 0, maxOutputTokens: ANALYSIS_REPAIR_MAX_TOKENS}));
+  }
+}
+
+function logInvalidAnalysisStage(stage: string, cause: unknown): void {
+  console.error('[api/ai] structured analysis stage rejected', {
+    stage,
+    errorName: cause instanceof Error ? cause.name : 'NonError',
+    issuePaths: cause instanceof z.ZodError ? cause.issues.map(issue => issue.path.join('.')).slice(0, 12) : undefined,
+  });
 }
 
 async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit> {
