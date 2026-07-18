@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {buildCompanyResearchPrompt, isExcludedSource, officialCompanyChannels, parseCompanyBrief} from './research';
+import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, isExcludedSource, officialCompanyChannels, parseCompanyBrief} from './research';
 
 describe('company research', () => {
   it('builds a prompt that forbids people/social research and includes the role', () => {
@@ -7,8 +7,10 @@ describe('company research', () => {
     expect(prompt).toContain('Acme');
     expect(prompt).toContain('Frontend Engineer');
     expect(prompt).toMatch(/do not research, name, or profile individual employees/i);
-    expect(prompt).toMatch(/official company careers, team, and contact pages/i);
+    expect(prompt).toMatch(/official company, careers\/jobs, team, contact/i);
     expect(prompt).toMatch(/must use Google Search/i);
+    expect(prompt).toContain('SUMMARY:');
+    expect(prompt).not.toContain('minified JSON');
   });
 
   it('neutralizes boundary injection inside research inputs', () => {
@@ -21,6 +23,7 @@ describe('company research', () => {
     expect(isExcludedSource({id: 'one', title: 'Jane Doe', url: 'https://www.linkedin.com/in/jane'})).toBe(true);
     expect(isExcludedSource({id: 'two', title: 'Acme on X', url: 'https://x.com/acme'})).toBe(true);
     expect(isExcludedSource({id: 'three', title: 'Acme Newsroom', url: 'https://acme.com/news'})).toBe(false);
+    expect(isExcludedSource({id: 'four', title: 'Discussion', url: 'https://quora.com/acme'})).toBe(true);
   });
 
   it('rejects malformed source URLs without leaking a URL parser exception', () => {
@@ -51,6 +54,21 @@ describe('company research', () => {
     expect(brief.summary.text).toBe('Acme is a SaaS firm.');
   });
 
+  it('parses citation-friendly labeled lines from grounded search output', () => {
+    const raw = 'SUMMARY: Acme builds accessible tooling.\nPRIORITY: Ship v2.\nROLE_CONTEXT: Values accessible React work.';
+    const brief = parseCompanyBrief(raw, [{id: 'source-0', title: 'Acme Careers', url: 'https://acme.com/careers'}], claimsSupportedBy(raw, ['Acme builds accessible tooling.', 'Ship v2.', 'Values accessible React work.']), 'Acme');
+
+    expect(brief.summary.text).toBe('Acme builds accessible tooling.');
+    expect(brief.priorities[0]?.text).toBe('Ship v2.');
+    expect(brief.roleContext?.text).toBe('Values accessible React work.');
+  });
+
+  it('builds a fresh-search retry prompt without duplicating the data boundary', () => {
+    const prompt = buildCompanyResearchRetryPrompt({company: 'Acme'});
+    expect(prompt).toMatch(/fresh Google Search/i);
+    expect(prompt.match(/RESEARCH_DATA_END/g)).toHaveLength(1);
+  });
+
   it('surfaces relevant official hiring channels without personal profiles', () => {
     const brief = {
       company: 'Acme',
@@ -65,6 +83,18 @@ describe('company research', () => {
     };
 
     expect(officialCompanyChannels(brief)).toEqual([brief.sources[0]]);
+  });
+
+  it('recognizes first-party domain titles behind Google grounding redirects', () => {
+    const brief = {
+      company: 'Google',
+      summary: {text: 'Google builds products.', citationIds: ['source-0']},
+      priorities: [],
+      roleContext: null,
+      sources: [{id: 'source-0', title: 'about.google', url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/result'}],
+    };
+
+    expect(officialCompanyChannels(brief)).toEqual(brief.sources);
   });
 });
 

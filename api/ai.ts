@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
-import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
+import {buildCompanyResearchPrompt, buildCompanyResearchRetryPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
 import {assertFitEvidenceExists, assertSuggestionsAreGrounded, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
@@ -162,11 +162,16 @@ async function interviewKit(request: InterviewKitRequest): Promise<InterviewKit>
 }
 
 async function research(input: CompanyResearchInput): Promise<GroundedCompanyBrief> {
-  const {text, sources, supports} = await generateGrounded(buildCompanyResearchPrompt(input), {temperature: 0.3, maxOutputTokens: RESEARCH_MAX_TOKENS});
+  const first = await generateGrounded(buildCompanyResearchPrompt(input), {temperature: 0.1, maxOutputTokens: RESEARCH_MAX_TOKENS});
   try {
-    return parseCompanyBrief(text, sources, supports, input.company);
-  } catch (cause) {
-    throw new GeminiError('invalid-output', cause instanceof Error ? cause.message : 'No usable company research was found.', 422);
+    return parseCompanyBrief(first.text, first.sources, first.supports, input.company);
+  } catch {
+    const retry = await generateGrounded(buildCompanyResearchRetryPrompt(input), {temperature: 0, maxOutputTokens: RESEARCH_MAX_TOKENS});
+    try {
+      return parseCompanyBrief(retry.text, retry.sources, retry.supports, input.company);
+    } catch (cause) {
+      throw new GeminiError('invalid-output', cause instanceof Error ? cause.message : 'No usable company research was found.', 422);
+    }
   }
 }
 

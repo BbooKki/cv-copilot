@@ -3,12 +3,15 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import handler from '../../api/ai';
 
 const originalEnabled = process.env.CLOUD_AI_ENABLED;
+const originalGeminiKey = process.env.GEMINI_API_KEY;
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   if (originalEnabled === undefined) delete process.env.CLOUD_AI_ENABLED;
   else process.env.CLOUD_AI_ENABLED = originalEnabled;
+  if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+  else process.env.GEMINI_API_KEY = originalGeminiKey;
 });
 
 describe('/api/ai safeguards', () => {
@@ -55,7 +58,41 @@ describe('/api/ai safeguards', () => {
       errorName: 'Error',
     }));
   });
+
+  it('retries company research when the first grounded response has no usable citations', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    const groundedText = 'SUMMARY: Acme builds accessible tools.\nPRIORITY: Ship v2.';
+    const summaryStart = groundedText.indexOf('Acme builds accessible tools.');
+    const priorityStart = groundedText.indexOf('Ship v2.');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(geminiResponse('unusable response'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        candidates: [{
+          content: {parts: [{text: groundedText}]},
+          groundingMetadata: {
+            groundingChunks: [{web: {uri: 'https://acme.example/careers', title: 'Acme Careers'}}],
+            groundingSupports: [
+              {segment: {startIndex: summaryStart, endIndex: summaryStart + 29, text: 'Acme builds accessible tools.'}, groundingChunkIndices: [0]},
+              {segment: {startIndex: priorityStart, endIndex: priorityStart + 8, text: 'Ship v2.'}, groundingChunkIndices: [0]},
+            ],
+          },
+        }],
+      }), {status: 200, headers: {'content-type': 'application/json'}}));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(JSON.stringify({operation: 'research-company', input: {company: 'Acme', role: 'Frontend Engineer'}}), 'research-retry-client'), response.value);
+
+    expect(response.status()).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(response.body()).summary.text).toBe('Acme builds accessible tools.');
+  });
 });
+
+function geminiResponse(text: string): Response {
+  return new Response(JSON.stringify({candidates: [{content: {parts: [{text}]}}]}), {status: 200, headers: {'content-type': 'application/json'}});
+}
 
 function requestDouble(body: string, address: string): IncomingMessage {
   return {
