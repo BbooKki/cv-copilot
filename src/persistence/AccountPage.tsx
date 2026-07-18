@@ -98,7 +98,7 @@ export function AccountPage({
         <button type="button" className="focus-ring flex min-h-10 items-center gap-2 text-xs text-neutral-400 hover:text-white" onClick={onBack}>
           <ArrowLeft size={15} />{backLabel}
         </button>
-        <div className="text-right"><p className="font-display text-sm font-semibold">CV Copilot</p><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Account</p></div>
+        <div className="flex items-center gap-2.5 text-right"><div className="flex h-8 items-center border border-white/20 bg-white px-2"><img src="/CVcopilot.svg" alt="CV Copilot" className="h-4 w-auto" /></div><div><p className="font-display text-sm font-semibold">CV Copilot</p><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Account</p></div></div>
       </div>
     </header>
 
