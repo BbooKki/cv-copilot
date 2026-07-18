@@ -202,8 +202,8 @@ export function LandingPage({onStart, onPricing, onSignIn, onSignUp}: LandingPag
     <footer className="border-t border-white/10">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 md:flex-row md:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 items-center border border-white/20 px-2">
-            <img src="/logo.png" alt="CV Copilot" className="h-4 w-auto" />
+          <div className="flex h-7 items-center border border-white/20 bg-white px-2">
+            <img src="/CVcopilot.svg" alt="CV Copilot" className="h-4 w-auto" />
           </div>
         </div>
         <p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Grounded CV tailoring · No account required</p>
