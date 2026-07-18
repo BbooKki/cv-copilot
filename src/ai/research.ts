@@ -16,7 +16,13 @@ export type CompanyResearchInput = z.infer<typeof companyResearchInputSchema>;
 const sourceSchema = z.object({
   id: z.string().trim().min(1).max(80),
   title: z.string().trim().min(1).max(200),
-  url: z.string().trim().url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol), 'Only HTTP(S) citation URLs are allowed.'),
+  url: z.string().trim().url().refine(value => {
+    try {
+      return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+      return false;
+    }
+  }, 'Only HTTP(S) citation URLs are allowed.'),
 }).strict();
 
 const citedClaimSchema = z.object({

@@ -12,6 +12,11 @@ describe('cvDocumentSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('reports malformed URLs as validation errors without throwing', () => {
+    expect(() => cvDocumentSchema.safeParse({...testCv, basics: {...testCv.basics, website: 'not a url'}})).not.toThrow();
+    expect(cvDocumentSchema.safeParse({...testCv, basics: {...testCv.basics, website: 'not a url'}}).success).toBe(false);
+  });
+
   it('rejects duplicate collection IDs', () => {
     const result = cvDocumentSchema.safeParse({...testCv, skills: [testCv.skills[0], testCv.skills[0]]});
     expect(result.success).toBe(false);

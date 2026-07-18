@@ -81,7 +81,8 @@ export async function generateGrounded(prompt: string, options: GenerateOptions 
 function buildBody(prompt: string, options: GenerateOptions, grounded: boolean): Record<string, unknown> {
   // Gemini 3 models "think" by default, which is slow and consumes the output
   // budget. Low thinking keeps structured extraction fast without hurting it.
-  const thinking = GEMINI_MODEL.startsWith('gemini-3') ? {thinkingConfig: {thinkingLevel: 'low'}} : {};
+  const supportsThinkingLevel = GEMINI_MODEL.startsWith('gemini-3') || GEMINI_MODEL === 'gemini-flash-latest';
+  const thinking = supportsThinkingLevel ? {thinkingConfig: {thinkingLevel: 'low'}} : {};
   return {
     contents: [{role: 'user', parts: [{text: prompt}]}],
     ...(grounded ? {tools: [{google_search: {}}]} : {}),
@@ -132,6 +133,13 @@ async function sendRequest(body: Record<string, unknown>): Promise<GeminiRespons
     clearTimeout(timeout);
   }
 
+  if (!response.ok) {
+    console.error('[gemini] provider request failed', {
+      model: GEMINI_MODEL,
+      status: response.status,
+      providerRequestId: response.headers.get('x-request-id') ?? response.headers.get('x-goog-request-id') ?? undefined,
+    });
+  }
   if (response.status === 401 || response.status === 403) throw new GeminiError('auth', 'The AI service rejected the API key.', 502);
   if (response.status === 429) throw new GeminiError('quota', 'The AI free-tier quota is exhausted. Please wait a moment and try again.', 429);
   if (response.status === 503) throw new GeminiError('busy', 'The AI service is busy. Please try again in a moment.', 503);

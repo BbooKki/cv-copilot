@@ -21,5 +21,6 @@ export function redactCvForCloud(document: CvDocument): CvDocument {
       website: '',
       links: [],
     },
+    projects: document.projects.map(project => ({...project, url: ''})),
   };
 }

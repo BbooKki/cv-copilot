@@ -1,11 +1,12 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
+import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {cvDocumentSchema} from '../src/cv/schema.js';
 import {buildCloudAnalysisPrompt, parseAiResult, type AiAnalysisRequest, type AiAnalysisResult} from '../src/ai/protocol.js';
 import {buildCompanyResearchPrompt, companyResearchInputSchema, parseCompanyBrief, type CompanyResearchInput, type GroundedCompanyBrief} from '../src/ai/research.js';
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
-import {generateGrounded, generateText, GeminiError} from './_lib/gemini.js';
+import {generateGrounded, generateText, GEMINI_MODEL, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
 export const config = {maxDuration: 60};
@@ -56,7 +57,10 @@ const rateBuckets = new Map<string, {startedAt: number; count: number}>();
 let globalBudget = {day: utcDay(), count: 0};
 
 export default async function handler(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const requestId = randomUUID();
+  let operation = 'unknown';
   response.setHeader('content-type', 'application/json; charset=utf-8');
+  response.setHeader('x-request-id', requestId);
   if (request.method !== 'POST') {
     response.statusCode = 405;
     response.end(JSON.stringify({error: 'Use POST.', code: 'method'}));
@@ -81,6 +85,7 @@ export default async function handler(request: IncomingMessage, response: Server
   }
   try {
     const body = bodySchema.parse(JSON.parse(await readRequest(request, MAX_BODY_BYTES)));
+    operation = body.operation;
     const budgetError = consumeGlobalQuota();
     if (budgetError) {
       response.statusCode = 429;
@@ -109,7 +114,7 @@ export default async function handler(request: IncomingMessage, response: Server
     response.statusCode = 400;
     response.end(JSON.stringify({error: 'Unsupported operation.', code: 'unknown'}));
   } catch (cause) {
-    respondError(response, cause);
+    respondError(response, cause, {requestId, operation});
   }
 }
 
@@ -156,24 +161,48 @@ async function research(input: CompanyResearchInput): Promise<GroundedCompanyBri
   }
 }
 
-function respondError(response: ServerResponse, cause: unknown): void {
+function respondError(response: ServerResponse, cause: unknown, context: {requestId: string; operation: string}): void {
+  logFailure(cause, context);
   if (cause instanceof GeminiError) {
     response.statusCode = cause.status;
-    response.end(JSON.stringify({error: cause.message, code: cause.code === 'safety' ? 'invalid-output' : cause.code}));
+    response.end(JSON.stringify({error: cause.message, code: cause.code === 'safety' ? 'invalid-output' : cause.code, requestId: context.requestId}));
     return;
   }
   if (cause instanceof z.ZodError) {
     response.statusCode = 400;
-    response.end(JSON.stringify({error: 'The analysis request was malformed.', code: 'invalid-request'}));
+    response.end(JSON.stringify({error: 'The analysis request was malformed.', code: 'invalid-request', requestId: context.requestId}));
     return;
   }
   if (cause instanceof SyntaxError) {
     response.statusCode = 400;
-    response.end(JSON.stringify({error: 'The request body was not valid JSON.', code: 'invalid-request'}));
+    response.end(JSON.stringify({error: 'The request body was not valid JSON.', code: 'invalid-request', requestId: context.requestId}));
     return;
   }
   response.statusCode = 500;
-  response.end(JSON.stringify({error: 'Unexpected server error during analysis.', code: 'unknown'}));
+  response.end(JSON.stringify({error: 'Unexpected server error during analysis.', code: 'unknown', requestId: context.requestId}));
+}
+
+function logFailure(cause: unknown, context: {requestId: string; operation: string}): void {
+  const base = {requestId: context.requestId, operation: context.operation, model: GEMINI_MODEL};
+  if (cause instanceof GeminiError) {
+    console.error('[api/ai] request failed', {...base, errorName: cause.name, providerCode: cause.code, status: cause.status});
+    return;
+  }
+  if (cause instanceof z.ZodError) {
+    console.error('[api/ai] request failed', {...base, errorName: cause.name, issuePaths: cause.issues.map(issue => issue.path.join('.')).slice(0, 12)});
+    return;
+  }
+  if (cause instanceof SyntaxError) {
+    console.error('[api/ai] request failed', {...base, errorName: cause.name});
+    return;
+  }
+  const error = cause instanceof Error ? cause : null;
+  console.error('[api/ai] request failed', {
+    ...base,
+    errorName: error?.name ?? 'NonError',
+    errorMessage: error?.message.slice(0, 500) ?? 'A non-Error value was thrown.',
+    stack: error?.stack?.slice(0, 4_000),
+  });
 }
 
 async function readRequest(request: IncomingMessage, max: number): Promise<string> {
