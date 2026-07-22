@@ -188,6 +188,20 @@ describe('cloud analysis (default)', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  it('opens the Tailor chat with a conversational welcome before requesting job details', async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', {name: 'Tailor'}));
+
+    expect(screen.getByText(/What would you like to work on\?/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Message CV Copilot…')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Help me improve my CV'})).toBeInTheDocument();
+    expect(screen.queryByText(/Share the job link or paste the description here/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Help me improve my CV'}));
+    expect(await screen.findByText(/Use Edit CV for exact details/)).toBeInTheDocument();
+  });
+
   it('asks for consent once, then runs cloud analysis and shows the fit summary', async () => {
     cloudHarness.analyze.mockResolvedValue({
       protocolVersion: 1,

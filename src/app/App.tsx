@@ -467,7 +467,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       return;
     }
 
-    const reply = analysis ? answerFromAnalysis(message, analysis, handledSuggestions) : 'Send a full job description or URL first. I’ll compare it with your CV, then you can ask about strengths, gaps, or suggested edits.';
+    const reply = analysis ? answerFromAnalysis(message, analysis, handledSuggestions) : answerBeforeAnalysis(message);
     setTailorMessages(messages => [...messages, {id: crypto.randomUUID(), role: 'assistant', text: reply}]);
   };
 
@@ -616,7 +616,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             </div>
 
             <div className="max-h-[min(56vh,620px)] min-h-[320px] space-y-4 overflow-y-auto px-4 py-5 lg:h-[clamp(200px,calc(100vh-480px),620px)] lg:min-h-0" aria-live="polite">
-              <ChatBubble role="assistant">Share the job link or paste the description here. I’ll compare it with your CV, explain the fit, and let you approve every edit.</ChatBubble>
+              <ChatBubble role="assistant">Hi — I’m here to help you build a clear, truthful CV. What would you like to work on?</ChatBubble>
               {jobText && !tailorMessages.some(message => message.role === 'user') && <ChatBubble role="user">{jobMeta.title ? `${jobMeta.title}${jobMeta.company ? ` · ${jobMeta.company}` : ''}` : compactJobMessage(jobText)}</ChatBubble>}
               {tailorMessages.map(message => <ChatBubble key={message.id} role={message.role}>{message.text}</ChatBubble>)}
               {extracting && <ChatStatus>Reading and sanitizing the job page…</ChatStatus>}
@@ -654,6 +654,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
                 <div className="mt-3 grid gap-2 sm:grid-cols-2"><button className="focus-ring flex min-h-10 items-center justify-center gap-2 border border-white/15 px-3 py-2 text-[10px] font-semibold text-neutral-200 hover:border-white/30 hover:text-white" onClick={() => { setTailorView('kit'); if (companyName.trim()) void runResearch(); }}><Globe size={13} />Research company</button><button className="focus-ring flex min-h-10 items-center justify-center gap-2 bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={requestInterviewKit}><Mic size={13} />Prepare interview kit</button></div>
               </AssistantAction>}
               {analysis && <ContactStrategyCard companyName={companyName} researchBusy={researchBusy} outreachBusy={outreachBusy} onResearchOfficialChannels={() => { setTailorView('kit'); if (companyName.trim()) void runResearch(); }} onPrepareOutreach={requestOutreachKit} />}
+              {!analysis && <div className="flex flex-wrap gap-2 pl-9">
+                {['Help me improve my CV', 'How does tailoring work?', 'I want to tailor my CV'].map(prompt => <button key={prompt} className="focus-ring rounded-full border border-white/10 px-3 py-1.5 text-[10px] text-neutral-400 hover:border-white/30 hover:text-white" onClick={() => submitTailorMessage(prompt)}>{prompt}</button>)}
+              </div>}
               <div ref={tailorEndRef} />
             </div>
 
@@ -664,7 +667,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             <div className="border-t border-white/10 bg-black/60 p-3">
               <label className="sr-only" htmlFor="tailor-message">Message CV Copilot</label>
               <div className="flex items-end gap-2 rounded-md border border-white/15 bg-white/[.025] p-2 focus-within:border-white/40">
-                <textarea id="tailor-message" rows={2} className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-5 text-neutral-200 outline-none" placeholder={analysis ? 'Ask about your fit, gaps, or suggested edits…' : 'Paste a job link or job description…'} value={tailorInput} onChange={event => setTailorInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitTailorMessage(); } }} />
+                <textarea id="tailor-message" rows={2} className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-5 text-neutral-200 outline-none" placeholder={analysis ? 'Ask about your fit, gaps, or suggested edits…' : 'Message CV Copilot…'} value={tailorInput} onChange={event => setTailorInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitTailorMessage(); } }} />
                 <button aria-label="Send message" className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-sm bg-white text-black disabled:opacity-30" disabled={!tailorInput.trim() || cloudBusy || extracting} onClick={() => submitTailorMessage()}><Send size={15} /></button>
               </div>
               <div className="mt-2 flex items-center justify-between gap-3"><p className="font-mono text-[8px] uppercase tracking-wider text-neutral-700">Enter to send · AI edits need approval</p><details className="text-right text-[10px] text-neutral-600"><summary className="focus-ring cursor-pointer select-none hover:text-white">Job details</summary><div className="mt-3 w-[min(420px,calc(100vw-64px))] text-left"><label className="font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-url">Job URL</label><div className="mt-2 flex gap-2"><input id="job-url" className="focus-ring min-w-0 flex-1 border border-white/10 bg-black px-3 py-2 text-xs outline-none focus:border-white/40" placeholder="https://company.com/jobs/..." value={jobUrl} onChange={event => setJobUrl(event.target.value)} /><button disabled={!jobUrl || extracting} className="focus-ring border border-white/15 px-3 text-xs hover:border-white/40 disabled:opacity-30" onClick={() => void handleExtract()}>{extracting ? <LoaderCircle className="animate-spin" size={14} /> : 'Fetch'}</button></div>{jobError && <p className="mt-2 text-xs leading-5 text-red-400">{jobError} Paste the description below instead.</p>}<label className="mt-3 block font-mono text-[9px] uppercase tracking-widest text-neutral-500" htmlFor="job-text">Job description</label><textarea id="job-text" rows={5} className="focus-ring mt-2 w-full resize-y border border-white/10 bg-black p-3 text-xs leading-5 text-neutral-300 outline-none focus:border-white/40" value={jobText} onChange={event => { clearJobDerivedResults(); setJobText(event.target.value); setJobMeta({}); }} /></div></details></div>
@@ -765,6 +768,20 @@ function compactUrl(url: string): string {
   } catch {
     return clip(url);
   }
+}
+
+function answerBeforeAnalysis(message: string): string {
+  const normalized = message.toLowerCase();
+  if (/\b(improve|edit|review|rewrite|cv|resume)\b/.test(normalized)) {
+    return 'Absolutely. Use Edit CV for exact details, experience, and dates; I can help you decide what to emphasize and explain every suggested change. I will not invent facts for you.';
+  }
+  if (/\b(tailor|job|role|application|apply|fit)\b/.test(normalized)) {
+    return 'I can tailor your CV when you have a role in mind. Paste the job description here, or open Job details to add a link. Then you choose whether to run a cloud or private comparison.';
+  }
+  if (/\b(hi|hello|hey|help|start)\b/.test(normalized)) {
+    return 'Hi! We can improve your CV together, talk through what to emphasize, or tailor it to a role when you are ready. I’ll only suggest changes supported by your CV.';
+  }
+  return 'I can help you shape your CV, discuss what to improve, or tailor it to a role whenever you are ready. What would you like to focus on?';
 }
 
 function answerFromAnalysis(question: string, analysis: AiAnalysisResult, handled: Record<string, 'accepted' | 'rejected'>): string {
