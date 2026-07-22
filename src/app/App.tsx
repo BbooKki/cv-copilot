@@ -36,6 +36,7 @@ import {PricingPage} from '../pricing/PricingPage';
 import {ApplicationKit} from './ApplicationKit';
 import {ContactStrategyCard} from './ContactStrategyCard';
 
+
 type View = 'cv' | 'copilot';
 type CopilotMode = 'edit' | 'tailor';
 type TailorView = 'conversation' | 'kit';
