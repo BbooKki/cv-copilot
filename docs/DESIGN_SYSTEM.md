@@ -2,16 +2,16 @@
 
 ## Direction
 
-CV Copilot uses a precise monochrome interface: black canvas, translucent white surfaces, thin white borders, high-contrast typography, compact monospace metadata, and restrained motion.
+CV Copilot uses a restrained light liquid-glass interface: a silver-gray ambient canvas, translucent white surfaces, fine specular borders, graphite typography, compact monospace metadata, and restrained motion.
 
-The application shell is dark. CV previews and exported documents remain paper-white by default for readability, printing, and professional use. Do not turn the CV itself into a dark cyberpunk poster.
+The application shell is light and softly layered. CV previews and exported documents remain opaque paper-white for readability, printing, and professional use. Glass belongs to application chrome only; never apply transparency, blur, ambient gradients, or decorative effects to CV content.
 
 ## Design principles
 
 - Professional before decorative: the product should feel like a serious editing instrument.
-- Monochrome by default: black, white, and neutral gray carry almost all hierarchy.
+- Neutral by default: graphite, white, silver, and cool neutral gray carry almost all hierarchy.
 - Information-dense but calm: compact labels and panels without visual noise.
-- Borders over shadows: structure panels with fine strokes and subtle surface changes.
+- Depth with restraint: use specular borders, subtle inner highlights, and cool-gray shadows only to separate major layers.
 - Motion communicates state: use animation for loading, transitions, and feedback, not spectacle.
 - The document is the focus: editor chrome should recede around the white CV preview.
 
@@ -21,19 +21,19 @@ The application shell is dark. CV previews and exported documents remain paper-w
 
 | Token | Value | Use |
 |---|---:|---|
-| `--app-canvas` | `#000000` | Page background and deepest surfaces |
-| `--app-surface` | `rgba(255,255,255,0.02)` | Panels and sidebars |
-| `--app-surface-raised` | `rgba(255,255,255,0.05)` | Inputs, selected rows, hover surfaces |
-| `--app-surface-strong` | `#171717` | Disabled controls and strong separation |
-| `--app-border` | `rgba(255,255,255,0.10)` | Default borders and dividers |
-| `--app-border-hover` | `rgba(255,255,255,0.30)` | Hover and interactive emphasis |
-| `--app-border-focus` | `rgba(255,255,255,0.55)` | Keyboard and input focus |
-| `--app-text` | `#ffffff` | Primary text and headings |
-| `--app-text-secondary` | `#a3a3a3` | Body and descriptions (`neutral-400`) |
-| `--app-text-muted` | `#737373` | Labels and secondary metadata (`neutral-500`) |
-| `--app-text-subtle` | `#525252` | Timestamps and quiet metadata (`neutral-600`) |
-| `--app-inverse-bg` | `#ffffff` | Primary action and selected inverse surface |
-| `--app-inverse-text` | `#000000` | Text on inverse surfaces |
+| `--app-canvas` | `#e7ecf2` | Ambient page background |
+| `--app-canvas-deep` | `#d7dee8` | Preview wells and deeper neutral separation |
+| `--app-surface` | `rgba(255,255,255,0.58)` | Major glass panels |
+| `--app-surface-raised` | `rgba(255,255,255,0.76)` | Toolbars, inputs, and selected surfaces |
+| `--app-surface-solid` | `#f8fafc` | Fallback when backdrop blur is unavailable |
+| `--app-border` | `rgba(255,255,255,0.76)` | Specular glass edge |
+| `--app-border-strong` | `rgba(100,116,139,0.24)` | Dividers and input edges |
+| `--app-text` | `#172033` | Primary text and headings |
+| `--app-text-secondary` | `#475569` | Body and descriptions |
+| `--app-text-muted` | `#64748b` | Labels and secondary metadata |
+| `--app-text-subtle` | `#8793a3` | Timestamps and quiet metadata |
+| `--app-inverse-bg` | `#101827` | Primary actions |
+| `--app-inverse-text` | `#ffffff` | Text on primary actions |
 
 ### Functional status colors
 
@@ -76,35 +76,34 @@ Suggested hierarchy:
 
 ## Shape, borders, and elevation
 
-- Prefer square or lightly rounded corners (`0-8px`).
-- Use `1px` borders for panels, inputs, suggestion cards, and toolbar separation.
-- Default panel treatment: `background: rgba(255,255,255,0.02)` with `border-color: rgba(255,255,255,0.10)`.
-- Avoid large soft drop shadows on dark surfaces.
-- A subtle white glow is allowed around the local-AI activation or focused primary action, but never around every card.
-- Use gradients only as near-invisible surface depth, not colorful decoration.
+- Use `16-20px` radii for major panels, `10-12px` for controls, and pills only for compact statuses or segmented controls.
+- Major floating surfaces use `background: rgba(255,255,255,0.58)`, a white specular border, `16-20px` backdrop blur, and one restrained cool-gray shadow.
+- Nested cards use translucent fills without backdrop blur so depth remains legible and performance stays predictable.
+- Ambient gradients remain neutral and low contrast. Do not introduce colorful blobs, rainbow refraction, or animated distortion.
+- Browsers without backdrop-filter receive an opaque `#f8fafc` surface fallback.
 
 ## Components
 
 ### Buttons
 
-- Primary: white background, black text, strong readable label.
-- Secondary: black or translucent surface, white/gray text, `white/15` border.
+- Primary: graphite background, white text, strong readable label.
+- Secondary: translucent white surface, graphite text, neutral border.
 - Ghost: transparent with muted text; brighten on hover.
 - Destructive: neutral by default, red only at the confirmation/destructive state.
 - All buttons need visible focus, disabled, hover, and busy states.
 
 ### Inputs
 
-- Black or translucent surface with a `white/10-15` border.
-- White entered text, `neutral-600` placeholder, `white/40-55` focus border.
+- Translucent white surface with a cool-gray border and subtle inner highlight.
+- Graphite entered text, slate placeholder, and a clearly visible dark focus ring.
 - Labels sit above fields; placeholders never replace labels.
 - Validation text appears directly below the relevant control.
 
 ### Panels and navigation
 
 - Use borders and spacing to separate editor, preview, AI review, and persistence controls.
-- Selected navigation may invert to white-on-black or use a white underline.
-- Do not fill every region with a different gray; hierarchy should come from spacing, type, and borders.
+- Selected segmented navigation uses an opaque white inset surface with graphite text and a compact shadow.
+- Do not blur every nested region; hierarchy should come from spacing, type, borders, and a small number of major glass layers.
 
 ### Suggestions
 
@@ -116,7 +115,7 @@ Suggested hierarchy:
 ### AI loading
 
 - Present model size, download progress, initialization, cached state, and cancellation in a technical, transparent style.
-- A thin white progress bar and compact monospace metrics match the portfolio reference.
+- A thin graphite progress bar and compact monospace metrics keep technical state transparent.
 - Reserve animated scanline or grid texture for the AI setup/empty state only; never place it behind the CV or long-form editor content.
 
 ## Layout
@@ -125,8 +124,8 @@ Suggested hierarchy:
 - The Copilot pane provides clear `Edit` and `Tailor` modes within one continuous workspace. Structured fields remain the primary control for exact CV facts; local-AI output appears as reviewable suggestion cards.
 - Keep template, undo, local-save status, and PDF export in the top toolbar so they remain available from either mode.
 - Keep account creation, sign-in state, and sign-out in a persistent toolbar control on desktop and mobile. Account UI must explain that cloud upload happens only after an explicit save action.
-- Use a dark neutral workspace behind the white paper so page edges are obvious.
-- Keep the primary toolbar sticky when useful, with a black translucent background and bottom border.
+- Use a matte silver preview well behind the white paper with a subtle cool shadow and edge rule.
+- Keep the primary toolbar sticky as a floating frosted control bar.
 - Mobile: switch between `CV` and `Copilot` instead of squeezing both panes side by side.
 - The CV preview should preserve real page proportions and predictable print margins.
 - Present all four fixed templates as keyboard-operable visual cards in the Copilot pane. The selected card uses both an icon/label and inverse treatment; selection must not rely on color alone.
@@ -156,10 +155,10 @@ Suggested hierarchy:
 
 - Meet WCAG AA contrast for UI text and controls.
 - Never use gray lighter/darker distinctions as the only state signal.
-- Maintain visible keyboard focus on the black canvas.
+- Maintain visible dark keyboard focus on every light or glass surface.
 - Touch targets should be at least `40px` in dense editor areas and preferably `44px` for primary actions.
 - Preserve browser zoom and avoid text smaller than `12px` for meaningful instructions.
 
 ## Reference boundaries
 
-Keep the established palette, typography roles, fine borders, inverse buttons, compact metadata, and local-AI presentation. Do not introduce personal branding, contact content, portfolio navigation, or full-screen cyberpunk effects.
+Keep the neutral palette, typography roles, fine borders, graphite actions, compact metadata, and transparent local-AI status presentation. Do not introduce personal branding, contact content, portfolio navigation, colorful glass, or full-screen spectacle.

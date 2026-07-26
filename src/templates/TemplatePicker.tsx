@@ -18,7 +18,7 @@ export function TemplatePicker({settings, onTemplateChange, onDensityChange, onP
       {TEMPLATE_OPTIONS.map(template => {
         const selected = settings.templateId === template.id;
         return <button key={template.id} type="button" aria-pressed={selected} className={`focus-ring relative border p-3 text-left transition ${selected ? 'border-white bg-white text-black' : 'border-white/10 bg-black text-neutral-300 hover:border-white/30'}`} onClick={() => onTemplateChange(template.id)}>
-          {selected && <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center bg-black text-white" aria-hidden="true"><Check size={12} /></span>}
+          {selected && <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-md bg-slate-900 text-white" aria-hidden="true"><Check size={12} /></span>}
           <TemplateMiniature templateId={template.id} selected={selected} />
           <span className="mt-3 block text-xs font-semibold">{template.name}</span>
           <span className={`mt-1 block text-[10px] leading-4 ${selected ? 'text-neutral-600' : 'text-neutral-500'}`}>{template.description}</span>
@@ -34,7 +34,7 @@ export function TemplatePicker({settings, onTemplateChange, onDensityChange, onP
 }
 
 function TemplateMiniature({templateId, selected}: {templateId: Settings['templateId']; selected: boolean}) {
-  const ink = selected ? 'bg-black' : 'bg-neutral-500';
+  const ink = selected ? 'bg-slate-900' : 'bg-neutral-500';
   const quiet = selected ? 'bg-neutral-400' : 'bg-neutral-800';
   return <span className={`block h-24 border p-2 ${selected ? 'border-black/20 bg-neutral-100' : 'border-white/10 bg-neutral-950'}`} aria-hidden="true">
     {templateId === 'classic' && <span className="block h-full border-t-2 border-current pt-2"><span className={`mb-1 block h-2 w-1/2 ${ink}`} /><span className={`mb-3 block h-1 w-1/3 ${quiet}`} /><span className={`mb-1 block h-px w-full ${quiet}`} /><span className={`mb-1 block h-1 w-full ${quiet}`} /><span className={`mb-3 block h-1 w-5/6 ${quiet}`} /><span className={`mb-1 block h-px w-full ${quiet}`} /><span className={`block h-1 w-3/4 ${quiet}`} /></span>}

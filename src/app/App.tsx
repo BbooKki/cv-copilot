@@ -557,9 +557,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     tailorEndRef.current?.scrollIntoView?.({behavior: 'smooth', block: 'nearest'});
   }, [activeStage, analysis, analysisError, cloudBusy, extracting, showConsent, tailorMessages.length]);
 
-  return <main className="app-grid min-h-screen bg-black text-white">
-    <header className="no-print sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 md:px-6">
+  return <main className="liquid-app app-grid min-h-screen">
+    <header className="no-print sticky top-0 z-40 p-3">
+      <div className="glass-toolbar mx-auto flex max-w-[1800px] items-center justify-between gap-4 rounded-2xl px-4 py-2.5 md:px-5">
         <div className="min-w-0"><h1 className="sr-only">CV Copilot</h1><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">{LOCAL_AI_ENABLED ? 'Cloud AI · Private mode · Truthful edits' : 'Cloud AI · Truthful edits · User approved'}</p></div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 md:flex"><StatusPill icon={<HardDrive size={12} />} label={saveState === 'saving' ? 'Saving locally' : saveState === 'error' ? 'Save failed' : 'Saved locally'} tone={saveState === 'error' ? 'error' : 'neutral'} />
@@ -570,21 +570,21 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           <AccountMenu onOpenAccount={onOpenAccount} />
         </div>
       </div>
-      <nav className="mx-auto flex max-w-[1800px] border-t border-white/5 lg:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} className={`focus-ring flex-1 px-3 py-3 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'bg-white text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
+      <nav className="glass-toolbar segmented-control mx-auto mt-2 flex max-w-[1800px] p-1 lg:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} aria-selected={view === item} className={`focus-ring flex-1 px-3 py-2.5 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>
     </header>
 
-    <div className="print-root mx-auto grid max-w-[1800px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,40%)]">
-      <section className={`paper-shell min-h-[calc(100vh-65px)] bg-neutral-950 px-4 py-7 md:px-8 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:overflow-y-auto lg:px-6 ${view !== 'cv' ? 'hidden lg:block' : ''}`} aria-label="CV preview workspace">
+    <div className="print-root workspace-grid mx-auto grid max-w-[1800px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,40%)]">
+      <section className={`paper-shell preview-canvas min-h-[calc(100vh-78px)] px-4 py-7 md:px-8 lg:sticky lg:top-[78px] lg:h-[calc(100vh-92px)] lg:overflow-y-auto lg:px-6 ${view !== 'cv' ? 'hidden lg:block' : ''}`} aria-label="CV preview workspace">
         <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Live document</p><p className="text-sm text-neutral-400">What you see is what exports. Click any text field to edit it.</p></div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">{templateName(document.settings.templateId)} · {document.settings.density}</p></div>
         <div className="paper-frame">{cvHasContent ? <CvPreview document={document} onEditField={openFieldEditor} /> : <EmptyCvPreview pageSize={document.settings.pageSize} />}</div>
       </section>
 
-      <aside className={`no-print min-h-[calc(100vh-65px)] border-l border-white/10 bg-black lg:h-[calc(100vh-65px)] lg:overflow-y-auto ${view !== 'copilot' ? 'hidden lg:block' : ''}`} aria-label="CV Copilot">
-        <div className="sticky top-0 z-10 border-b border-white/10 bg-black/95 p-4 backdrop-blur-xl md:p-5">
+      <aside className={`glass-panel copilot-shell no-print min-h-[calc(100vh-78px)] overflow-hidden lg:h-[calc(100vh-92px)] lg:overflow-y-auto ${view !== 'copilot' ? 'hidden lg:block' : ''}`} aria-label="CV Copilot">
+        <div className="copilot-header sticky top-0 z-10 border-b border-white/10 p-4 md:p-5">
           <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private assistant</p><h2 className="mt-1 font-display text-xl font-semibold">CV Copilot</h2></div><button className="focus-ring p-2 text-neutral-500 hover:text-white md:hidden" onClick={undo} disabled={!undoStack.length}><RotateCcw size={18} /></button></div>
-          <div className="mt-4 grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
-            <button role="tab" aria-selected={copilotMode === 'edit'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'edit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('edit')}><PenLine size={14} />Edit CV</button>
-            <button role="tab" aria-selected={copilotMode === 'tailor'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'tailor' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('tailor')}><MessageSquare size={14} />Tailor</button>
+          <div className="segmented-control mt-4 grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
+            <button role="tab" aria-selected={copilotMode === 'edit'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'edit' ? 'text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('edit')}><PenLine size={14} />Edit CV</button>
+            <button role="tab" aria-selected={copilotMode === 'tailor'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'tailor' ? 'text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('tailor')}><MessageSquare size={14} />Tailor</button>
           </div>
         </div>
 
@@ -599,9 +599,9 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           </section>
           {LOCAL_AI_ENABLED && <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />}
         </div> : <div className="p-4 md:p-5">
-          <div className={`mb-3 grid ${analysis ? 'grid-cols-2' : 'grid-cols-1'} border border-white/10 bg-white/[.015] p-1`} role="tablist" aria-label="Tailor workspace">
-            <button role="tab" aria-selected={tailorView === 'conversation'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'conversation' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('conversation')}>Conversation</button>
-            {analysis && <button role="tab" aria-selected={tailorView === 'kit'} className={`focus-ring min-h-10 px-3 py-2 text-xs ${tailorView === 'kit' ? 'bg-white text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>}
+          <div className={`segmented-control mb-3 grid ${analysis ? 'grid-cols-2' : 'grid-cols-1'} border border-white/10 p-1`} role="tablist" aria-label="Tailor workspace">
+            <button role="tab" aria-selected={tailorView === 'conversation'} className="focus-ring min-h-10 px-3 py-2 text-xs text-neutral-500 hover:text-white" onClick={() => setTailorView('conversation')}>Conversation</button>
+            {analysis && <button role="tab" aria-selected={tailorView === 'kit'} className="focus-ring min-h-10 px-3 py-2 text-xs text-neutral-500 hover:text-white" onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>}
           </div>
 
           {tailorView === 'conversation' && <section className="overflow-hidden border border-white/10 bg-white/[.015]" aria-label="Tailor conversation">
@@ -703,7 +703,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     </div>
 
     {editingTarget && <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Edit ${fieldLabel(editingTarget)}`} onClick={closeFieldEditor}>
-      <div className="w-full max-w-lg border border-white/15 bg-neutral-950 p-4" onClick={event => event.stopPropagation()}>
+      <div className="glass-panel w-full max-w-lg rounded-t-2xl p-4 sm:rounded-2xl" onClick={event => event.stopPropagation()}>
         <div className="flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">Edit · {fieldLabel(editingTarget)}</p><button className="focus-ring p-1 text-neutral-500 hover:text-white" aria-label="Close editor" onClick={closeFieldEditor}><X size={16} /></button></div>
         <textarea autoFocus aria-label={fieldLabel(editingTarget)} rows={5} className="focus-ring mt-3 w-full resize-y border border-white/10 bg-black p-3 text-sm leading-6 text-white outline-none focus:border-white/40" value={editingValue} onChange={event => setEditingValue(event.target.value)} onKeyDown={handleEditorKey} />
         <div className="mt-3 flex items-center justify-between gap-3"><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">⌘/Ctrl+Enter save · Esc cancel</p><div className="flex gap-2"><button className="focus-ring border border-white/15 px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={closeFieldEditor}>Cancel</button><button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black" onClick={saveFieldEditor}>Save</button></div></div>

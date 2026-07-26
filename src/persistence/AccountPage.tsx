@@ -92,9 +92,9 @@ export function AccountPage({
     }
   };
 
-  return <main className="min-h-screen bg-black text-white">
-    <header className="border-b border-white/10 bg-black/90">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-6">
+  return <main className="liquid-app min-h-screen">
+    <header className="sticky top-0 z-40 p-3">
+      <div className="glass-toolbar mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl px-4 py-2.5 md:px-5">
         <button type="button" className="focus-ring flex min-h-10 items-center gap-2 text-xs text-neutral-400 hover:text-white" onClick={onBack}>
           <ArrowLeft size={15} />{backLabel}
         </button>
@@ -121,7 +121,7 @@ export function AccountPage({
         {passwordRecovery && authState.status === 'signed-in' && auth && <PasswordResetForm auth={auth} busy={busy} error={error} run={run} onComplete={onPasswordResetComplete} />}
 
         {!passwordRecovery && authState.status === 'signed-in' && authState.session && auth && <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <section className="border border-white/10 bg-white/[.02] p-5 md:p-6" aria-labelledby="saved-cvs-title">
+          <section className="glass-card p-5 md:p-6" aria-labelledby="saved-cvs-title">
             <div className="flex items-start justify-between gap-4">
               <div><p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Cloud library</p><h2 id="saved-cvs-title" className="mt-1 font-display text-xl font-semibold">Saved CVs</h2></div>
               {busy && <LoaderCircle aria-label="Account operation in progress" className="animate-spin text-neutral-500" size={16} />}
@@ -132,7 +132,7 @@ export function AccountPage({
             <div className="mt-5 space-y-2">{resumes.map(resume => {
               const title = resume.title || 'Untitled CV';
               const confirmingDelete = deleteId === resume.id;
-              return <article key={resume.id} className="border border-white/10 bg-black p-3">
+              return <article key={resume.id} className="glass-subtle rounded-xl p-3">
                 <div className="flex items-center gap-3">
                   <button type="button" aria-label={`Open ${title}`} disabled={busy} className="focus-ring min-h-11 min-w-0 flex-1 text-left disabled:opacity-50" onClick={() => void run(async () => onOpenDocument(await repository.load(resume.id)))}>
                     <span className="block truncate text-sm text-neutral-200">{title}</span>
@@ -148,7 +148,7 @@ export function AccountPage({
           </section>
 
           <aside className="space-y-4">
-            <section className="border border-white/10 bg-white/[.02] p-5">
+            <section className="glass-card p-5">
               <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-600">Signed in</p>
               <p className="mt-2 break-all text-sm text-neutral-200">{authState.session.user.email ?? 'Supabase account'}</p>
               <div className={`mt-4 flex items-center gap-2 border p-3 ${entitlement.premiumActive ? 'border-emerald-400/20 bg-emerald-400/5 text-emerald-300' : 'border-white/10 text-neutral-400'}`}>
@@ -176,10 +176,10 @@ function AuthForms({initialMode, auth, busy, error, message, run, onMessage}: {i
     setPassword('');
   };
 
-  return <section className="max-w-md border border-white/10 bg-white/[.02] p-5 md:p-6" aria-labelledby="auth-form-title">
-    {mode !== 'forgot' && <div className="grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Account access">
-      <button type="button" role="tab" aria-selected={mode === 'sign-in'} className={`focus-ring min-h-10 px-3 text-xs ${mode === 'sign-in' ? 'bg-white text-black' : 'text-neutral-400'}`} onClick={() => selectMode('sign-in')}>Sign in</button>
-      <button type="button" role="tab" aria-selected={mode === 'sign-up'} className={`focus-ring min-h-10 px-3 text-xs ${mode === 'sign-up' ? 'bg-white text-black' : 'text-neutral-400'}`} onClick={() => selectMode('sign-up')}>Create account</button>
+  return <section className="glass-card max-w-md p-5 md:p-6" aria-labelledby="auth-form-title">
+    {mode !== 'forgot' && <div className="segmented-control grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Account access">
+      <button type="button" role="tab" aria-selected={mode === 'sign-in'} className="focus-ring min-h-10 px-3 text-xs text-neutral-400" onClick={() => selectMode('sign-in')}>Sign in</button>
+      <button type="button" role="tab" aria-selected={mode === 'sign-up'} className="focus-ring min-h-10 px-3 text-xs text-neutral-400" onClick={() => selectMode('sign-up')}>Create account</button>
     </div>}
     <h2 id="auth-form-title" className="mt-6 font-display text-xl font-semibold">{mode === 'sign-in' ? 'Welcome back' : mode === 'sign-up' ? 'Create your account' : 'Reset your password'}</h2>
     <p className="mt-2 text-xs leading-5 text-neutral-500">{mode === 'forgot' ? 'We will email you a secure link to choose a new password.' : 'Authentication does not upload your local CV.'}</p>
@@ -211,7 +211,7 @@ function AuthForms({initialMode, auth, busy, error, message, run, onMessage}: {i
 
 function PasswordResetForm({auth, busy, error, run, onComplete}: {auth: SupabaseAuthService; busy: boolean; error: string; run: RunAction; onComplete: () => void}) {
   const [password, setPassword] = useState('');
-  return <section className="max-w-md border border-white/10 bg-white/[.02] p-5 md:p-6">
+  return <section className="glass-card max-w-md p-5 md:p-6">
     <h2 className="font-display text-xl font-semibold">Choose a new password</h2>
     <form className="mt-5" onSubmit={event => { event.preventDefault(); void run(async () => { await auth.updatePassword(password); onComplete(); }); }}>
       <label className="block font-mono text-[10px] uppercase tracking-widest text-neutral-500" htmlFor="new-password">New password</label>

@@ -42,9 +42,9 @@ const PACKS = [
 ] as const;
 
 export function PricingPage({onBack, onStart}: PricingPageProps) {
-  return <main className="min-h-screen bg-black text-white">
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
+  return <main className="liquid-app min-h-screen">
+    <header className="sticky top-0 z-40 p-3">
+      <div className="glass-toolbar mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl px-4 py-2.5 md:px-5">
         <button type="button" className="focus-ring flex min-h-10 items-center gap-2 text-xs text-neutral-400 hover:text-white" onClick={onBack}>
           <ArrowLeft size={15} />Back to home
         </button>
@@ -54,9 +54,9 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
       </div>
     </header>
 
-    <section className="app-grid border-b border-white/10" aria-labelledby="pricing-title">
+    <section aria-labelledby="pricing-title">
       <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-24">
-        <div className="flex max-w-3xl items-center gap-2 border border-white/10 bg-white/[.03] px-3 py-2 text-neutral-400 sm:w-fit">
+        <div className="glass-subtle flex max-w-3xl items-center gap-2 rounded-xl px-3 py-2 text-neutral-400 sm:w-fit">
           <Coins size={14} aria-hidden="true" />
           <p className="font-mono text-[9px] uppercase tracking-[.16em]">Preview pricing · Paid packs coming after MVP</p>
         </div>
@@ -69,11 +69,11 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
       </div>
     </section>
 
-    <section className="border-b border-white/10" aria-label="Credit packs">
+    <section className="border-t border-white/60 bg-white/15" aria-label="Credit packs">
       <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
-        <div className="grid gap-px border border-white/10 bg-white/10 lg:grid-cols-3">
-          {PACKS.map(pack => <article key={pack.name} className={`relative flex flex-col bg-black p-6 md:p-7 ${pack.featured ? 'outline outline-1 -outline-offset-1 outline-white/40' : ''}`}>
-            {pack.featured && <span className="absolute right-4 top-4 bg-white px-2.5 py-1 font-mono text-[8px] uppercase tracking-[.14em] text-black">Best value</span>}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {PACKS.map(pack => <article key={pack.name} className={`glass-card relative flex flex-col p-6 md:p-7 ${pack.featured ? 'ring-1 ring-slate-400/40' : ''}`}>
+            {pack.featured && <span className="absolute right-4 top-4 rounded-full bg-slate-900 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[.14em] text-white shadow-sm">Best value</span>}
             <p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">{pack.eyebrow}</p>
             <h2 className="mt-3 font-display text-2xl font-semibold">{pack.name}</h2>
             <div className="mt-7 flex items-end gap-2">
@@ -94,7 +94,7 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
           </article>)}
         </div>
 
-        <div className="mt-10 grid gap-px border border-white/10 bg-white/10 md:grid-cols-3">
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
           <ValueNote icon={<RefreshCcw size={17} />} title="One clear unit">One credit is planned to cover one AI tailoring run for one job description.</ValueNote>
           <ValueNote icon={<FileDown size={17} />} title="Exports stay free">Editing, template switching, PDF export, and re-downloads use zero credits.</ValueNote>
           <ValueNote icon={<Sparkles size={17} />} title="No silent charges">The app will show the credit cost before starting a paid AI action.</ValueNote>
@@ -109,8 +109,8 @@ export function PricingPage({onBack, onStart}: PricingPageProps) {
 }
 
 function ValueNote({icon, title, children}: {icon: React.ReactNode; title: string; children: React.ReactNode}) {
-  return <article className="bg-black p-5 md:p-6">
-    <div className="grid h-9 w-9 place-items-center border border-white/15 bg-white/[.03] text-neutral-300">{icon}</div>
+  return <article className="glass-card p-5 md:p-6">
+    <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/80 bg-white/70 text-neutral-500 shadow-sm">{icon}</div>
     <h2 className="mt-4 font-display text-base font-semibold">{title}</h2>
     <p className="mt-2 text-xs leading-5 text-neutral-500">{children}</p>
   </article>;
