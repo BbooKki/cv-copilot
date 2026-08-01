@@ -31,6 +31,8 @@ import {templateName} from '../templates/templateCatalog';
 import {STYLE_PRESETS} from '../templates/presets';
 import {AccountMenu} from '../persistence/AccountMenu';
 import {AccountPage} from '../persistence/AccountPage';
+import {AccountUnavailableDialog} from '../persistence/AccountUnavailableDialog';
+import {isSupabaseConfigured} from '../persistence/supabaseClient';
 import {LandingPage} from '../landing/LandingPage';
 import {PricingPage} from '../pricing/PricingPage';
 import {ApplicationKit} from './ApplicationKit';
@@ -46,6 +48,7 @@ const CLOUD_CONSENT_KEY = 'cvcopilot.cloudConsent.v1';
 
 export function App() {
   const [route, setRoute] = useState(() => appRoute(window.location.pathname));
+  const [accountNoticeOpen, setAccountNoticeOpen] = useState(false);
 
   useEffect(() => {
     const handlePopState = () => setRoute(appRoute(window.location.pathname));
@@ -58,35 +61,50 @@ export function App() {
     setRoute(appRoute(new URL(path, window.location.origin).pathname));
   }, []);
 
+  const openAccount = useCallback((path: AppPath = '/account') => {
+    if (!isSupabaseConfigured) {
+      setAccountNoticeOpen(true);
+      return;
+    }
+    navigate(path);
+  }, [navigate]);
+
+  const continueToEditor = useCallback(() => {
+    setAccountNoticeOpen(false);
+    if (route === 'landing' || route === 'account' || route === 'password-recovery') navigate('/app');
+  }, [navigate, route]);
+
+  const accountDialog = <AccountUnavailableDialog open={accountNoticeOpen} onClose={() => setAccountNoticeOpen(false)} onContinue={continueToEditor} />;
+
   if (route === 'landing') {
-    return <LandingPage
-      onStart={() => navigate('/app')}
-      onPricing={() => navigate('/pricing')}
-      onSignIn={() => navigate('/account?mode=sign-in&from=landing')}
-      onSignUp={() => navigate('/account?mode=sign-up&from=landing')}
-    />;
+    return <><LandingPage
+        onStart={() => navigate('/app')}
+        onPricing={() => navigate('/pricing')}
+        onSignIn={() => openAccount('/account?mode=sign-in&from=landing')}
+        onSignUp={() => openAccount('/account?mode=sign-up&from=landing')}
+      />{accountDialog}</>;
   }
 
   if (route === 'pricing') {
-    return <PricingPage onBack={() => navigate('/')} onStart={() => navigate('/app')} />;
+    return <><PricingPage onBack={() => navigate('/')} onStart={() => navigate('/app')} />{accountDialog}</>;
   }
 
   if (route !== 'workspace') {
     const fromLanding = new URLSearchParams(window.location.search).get('from') === 'landing';
-    return <AccountPage
-      passwordRecovery={route === 'password-recovery'}
-      initialMode={accountMode(window.location.search)}
-      backLabel={fromLanding ? 'Back to home' : 'Back to editor'}
-      onBack={() => navigate(fromLanding ? '/' : '/app')}
-      onOpenDocument={async document => {
-        await localResumeRepository.save(document);
-        navigate('/app');
-      }}
-      onPasswordResetComplete={() => navigate('/account')}
-    />;
+    return <><AccountPage
+        passwordRecovery={route === 'password-recovery'}
+        initialMode={accountMode(window.location.search)}
+        backLabel={fromLanding ? 'Back to home' : 'Back to editor'}
+        onBack={() => navigate(fromLanding ? '/' : '/app')}
+        onOpenDocument={async document => {
+          await localResumeRepository.save(document);
+          navigate('/app');
+        }}
+        onPasswordResetComplete={() => navigate('/account')}
+      />{accountDialog}</>;
   }
 
-  return <Workspace onOpenAccount={() => navigate('/account')} />;
+  return <><Workspace onOpenAccount={() => openAccount('/account')} />{accountDialog}</>;
 }
 
 function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {

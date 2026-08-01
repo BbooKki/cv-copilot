@@ -373,15 +373,16 @@ describe('account routing', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('opens the dedicated account page and returns to the editor', async () => {
+  it('explains that account access is temporarily unavailable', async () => {
     window.history.replaceState({}, '', '/app');
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', {name: 'Sign in'}));
-    expect(await screen.findByRole('heading', {name: 'Your account'})).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/account');
+    expect(await screen.findByRole('heading', {name: 'Accounts are temporarily unavailable'})).toBeInTheDocument();
+    expect(screen.getByText(/drafts are saved locally in this browser/i)).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/app');
 
-    fireEvent.click(screen.getByRole('button', {name: 'Back to editor'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Continue to editor'}));
     expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
     expect(window.location.pathname).toBe('/app');
   });
@@ -403,17 +404,15 @@ describe('landing page', () => {
     expect(screen.queryByRole('tab', {name: 'Tailor'})).not.toBeInTheDocument();
   });
 
-  it('opens the requested account form from the landing page', async () => {
+  it('opens the account-unavailable notice from the landing page', async () => {
     window.history.replaceState({}, '', '/');
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', {name: 'Create account'}));
-    expect(await screen.findByRole('heading', {name: 'Create your account'})).toBeInTheDocument();
-    expect(screen.getByRole('tab', {name: 'Create account'})).toHaveAttribute('aria-selected', 'true');
-    expect(window.location.pathname).toBe('/account');
-    expect(window.location.search).toContain('mode=sign-up');
+    expect(await screen.findByRole('heading', {name: 'Accounts are temporarily unavailable'})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
 
-    fireEvent.click(screen.getByRole('button', {name: 'Back to home'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Close'}));
     expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });

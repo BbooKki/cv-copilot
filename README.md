@@ -28,13 +28,13 @@ The hackathon MVP includes a responsive structured editor, direct preview editin
 
 ## Privacy model
 
-The application works without an account. Cloud analysis is the recommended fast path and requires explicit consent; name and contact fields are removed before employment content and job text are sent to the provider. Private Mode runs the existing model on-device. Company research receives only public company, role, and job information. Cloud saving remains a separate explicit action.
+The application works without an account. Cloud analysis is the recommended fast path and requires explicit consent; name and contact fields are removed before employment content and job text are sent to the provider. Private Mode runs the existing model on-device. Company research receives only public company, role, and job information. Cloud saving remains a separate explicit action. Account access is currently disabled by default; the UI explains that local editing and export remain available.
 
 ## Run locally
 
 1. Install Node.js 20 or newer.
 2. Run `npm install`.
-3. Copy `.env.example` to `.env.local`; add a server-only Gemini key and any optional Supabase publishable values.
+3. Copy `.env.example` to `.env.local`; add a server-only Gemini key and any optional Supabase publishable values. Keep `VITE_ACCOUNTS_ENABLED=false` while account access is unavailable.
 4. Run `npm run dev`.
 
 Useful checks are `npm run typecheck`, `npm test`, and `npm run build`. The Gemma artifact is about 2.01 GB and downloads only after explicit user action in a WebGPU-capable browser. It is cached locally and is never bundled with the deployment.
@@ -59,7 +59,7 @@ Cloud saving uses email/password authentication with email confirmation and pass
 4. In **Auth → URL Configuration**, set the Site URL to the production application URL. Add the exact production URL, `/account`, `/account/reset-password`, `http://localhost:5173/**`, and the required Vercel preview pattern to the redirect allow list.
 5. Keep email confirmation enabled and configure production SMTP before launch; the hosted trial sender is only suitable for development.
 6. Grant premium manually for the MVP by inserting or updating the user's row in `public.account_entitlements`. A missing row is a free account; use `plan = 'premium'` and leave `expires_at` null for non-expiring access.
-7. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_CLOUD_ENABLED=true` locally and in the deployment environment.
+7. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_ACCOUNTS_ENABLED=true`, and `VITE_CLOUD_ENABLED=true` locally and in the deployment environment only after the Supabase project is available and verified.
 
 ```sql
 insert into public.account_entitlements (user_id, plan, expires_at)

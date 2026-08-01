@@ -110,7 +110,7 @@ export function AccountPage({
       </div>
 
       <div className="mt-10">
-        {authState.status === 'unavailable' && <Notice tone="neutral">Accounts are not configured. Add the browser-safe Supabase URL and publishable key to enable this page.</Notice>}
+        {authState.status === 'unavailable' && <Notice tone="neutral">Accounts are temporarily unavailable. Your CV still works without sign-in and is saved locally in this browser.</Notice>}
         {authState.status === 'loading' && <Notice tone="neutral"><LoaderCircle className="animate-spin" size={14} />Checking your session…</Notice>}
         {authState.status === 'error' && <Notice tone="error">Could not check your session: {authState.error}</Notice>}
 
