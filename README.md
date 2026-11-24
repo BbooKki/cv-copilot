@@ -4,7 +4,7 @@ CV Copilot is an AI-assisted application accelerator designed for a hackathon. U
 
 ## Status
 
-The hackathon MVP includes a responsive structured editor, direct preview editing, two print-ready templates, local autosave and undo, guarded job-page extraction, reviewable AI suggestions, optional cited company research, interview preparation, quota-free outreach templates, PDF export, and optional owner-only Supabase backup.
+The hackathon MVP includes a responsive structured editor, direct preview editing, four print-ready templates (Classic ATS, Modern Editorial, Professional Sidebar, Minimal Technical), local autosave and undo, guarded job-page extraction, reviewable AI suggestions, optional cited company research, interview preparation, quota-free outreach templates, PDF export, and optional owner-only Supabase backup.
 
 ## Stack
 
