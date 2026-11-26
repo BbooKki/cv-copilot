@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Check, Cpu, LoaderCircle, Pencil, Plus, Search, Sparkles, Trash2, X} from 'lucide-react';
 import {InputField, TextAreaField} from '../components/Field';
 import {makeId, type CvDocument} from '../cv/schema';
@@ -23,13 +23,19 @@ type Props = {
   onRequestCloudConsent: (onGranted: () => void) => void;
   /** Applies a new document through the normal undo path. */
   onApplyDocument: (next: CvDocument) => void;
+  /** The app's cloud consent prompt while it is open, shown beside the button that asked for it. */
+  consentPrompt?: ReactNode;
 };
 
 type Draft = {id?: string; title: string; text: string; context: string; tags: string; linkedItemId: string};
 const emptyDraft: Draft = {title: '', text: '', context: '', tags: '', linkedItemId: ''};
 const repository = new LocalBankRepository();
 
-export function BankPanel({document, jobText, onJobTextChange, jobTitle, jobCompany, cloudConsent, onRequestCloudConsent, onApplyDocument}: Props) {
+export function BankPanel({document, jobText, onJobTextChange, jobTitle, jobCompany, cloudConsent, onRequestCloudConsent, onApplyDocument, consentPrompt}: Props) {
+  const consentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (consentPrompt) consentRef.current?.scrollIntoView?.({behavior: 'smooth', block: 'nearest'});
+  }, [consentPrompt]);
   const [bank, setBank] = useState<ExperienceBank>(() => repository.load());
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [formOpen, setFormOpen] = useState(false);
@@ -208,7 +214,8 @@ export function BankPanel({document, jobText, onJobTextChange, jobTitle, jobComp
             </article>;
           })}
           {results.length > 0 && <button className="focus-ring mt-2 flex min-h-10 w-full items-center justify-center gap-2 border border-white/20 px-3 py-2 text-xs font-semibold text-white hover:border-white/40 disabled:opacity-40" disabled={suggesting} onClick={requestSuggestions}>{suggesting ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Write tailored bullets from these (cloud AI)</button>}
-          {results.length > 0 && <p className="text-[11px] leading-5 text-neutral-600">Only these {results.length} entries are sent, without contact details. Each bullet must cite its entry and add no new facts or numbers.</p>}
+          {results.length > 0 && <p className="text-[11px] leading-5 text-neutral-600">{results.length === 1 ? 'Only this entry is sent' : `Only these ${results.length} entries are sent`}, without contact details. Each bullet must cite its entry and add no new facts or numbers.</p>}
+          {consentPrompt && <div ref={consentRef} className="mt-2">{consentPrompt}</div>}
         </div>}
         {suggestError && <p role="alert" className="mt-2 text-xs text-amber-700">{suggestError}</p>}
 

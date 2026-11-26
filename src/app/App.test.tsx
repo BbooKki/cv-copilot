@@ -15,6 +15,9 @@ vi.mock('../persistence/supabaseClient', async importOriginal => ({
   get isSupabaseConfigured() { return accountsHarness.enabled; },
 }));
 
+const bankCloudHarness = vi.hoisted(() => ({suggest: vi.fn()}));
+vi.mock('../ai/bankClient', () => ({suggestFromBankWithCloud: (...args: unknown[]) => bankCloudHarness.suggest(...args)}));
+
 vi.mock('../gemma/useGemma', () => ({
   useGemma: (onComplete: (raw: string) => void, onGenerationTimeout: (partialOutput: string) => void) => {
     gemmaHarness.complete = onComplete;
@@ -473,5 +476,38 @@ describe('accounts not configured', () => {
 
     expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
     await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+});
+
+describe('experience bank cloud consent', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('cv-copilot-experience-bank-v1', JSON.stringify({schemaVersion: 1, entries: [
+      {id: 'b-monitor', title: 'Batch job monitoring', text: 'Built a Vue 3 monitoring dashboard for nightly batch jobs.', tags: ['dashboards'], updatedAt: '2026-01-01T00:00:00.000Z'},
+    ]}));
+    bankCloudHarness.suggest.mockReset();
+    bankCloudHarness.suggest.mockResolvedValue({suggestions: []});
+  });
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('shows the consent prompt on the Bank tab and sends entries after consent', async () => {
+    window.history.replaceState({}, '', '/app');
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('tab', {name: 'Bank'}));
+    fireEvent.change(screen.getByRole('textbox', {name: 'Job description'}), {target: {value: 'Frontend engineer building Vue 3 monitoring dashboards for operations.'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Find matching entries'}));
+    expect(await screen.findByRole('button', {name: /Write tailored bullets/})).toBeInTheDocument();
+    expect(screen.getByText(/Only this entry is sent/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {name: /Write tailored bullets/}));
+    expect(bankCloudHarness.suggest).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', {name: 'Use cloud AI'}));
+
+    await waitFor(() => expect(bankCloudHarness.suggest).toHaveBeenCalledTimes(1));
   });
 });

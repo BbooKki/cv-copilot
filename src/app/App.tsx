@@ -571,6 +571,12 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     tailorEndRef.current?.scrollIntoView?.({behavior: 'smooth', block: 'nearest'});
   }, [activeStage, analysis, analysisError, cloudBusy, extracting, showConsent, tailorMessages.length]);
 
+  // Shared by the Tailor conversation and the Bank tab, so consent can be granted from either.
+  const consentPrompt = showConsent && <AssistantAction title="Before I send this" icon={<WandSparkles size={13} />}>
+                <p>Your work history and the job description go to the cloud AI provider. Your name and contact details are removed first.</p>
+                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); pendingBankActionRef.current = null; setShowConsent(false); if (LOCAL_AI_ENABLED) setAiMode('local'); }}>{LOCAL_AI_ENABLED ? 'Keep it private' : 'Not now'}</button></div>
+              </AssistantAction>;
+
   return <main className="liquid-app app-grid min-h-screen">
     <header className="no-print sticky top-0 z-40 p-3">
       <div className="glass-toolbar mx-auto flex max-w-[1800px] items-center justify-between gap-4 rounded-2xl px-4 py-2.5 md:px-5">
@@ -622,6 +628,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
           cloudConsent={cloudConsent}
           onRequestCloudConsent={onGranted => { pendingBankActionRef.current = onGranted; setPendingCloudAction('bank'); setShowConsent(true); }}
           onApplyDocument={next => updateDocument(next, true)}
+          consentPrompt={pendingCloudAction === 'bank' ? consentPrompt : null}
         /> : <div className="p-4 md:p-5">
           <div className={`segmented-control mb-3 grid ${analysis ? 'grid-cols-2' : 'grid-cols-1'} border border-white/10 p-1`} role="tablist" aria-label="Tailor workspace">
             <button role="tab" aria-selected={tailorView === 'conversation'} className="focus-ring min-h-10 px-3 py-2 text-xs text-neutral-500 hover:text-white" onClick={() => setTailorView('conversation')}>Conversation</button>
@@ -648,10 +655,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
               {cloudBusy && <ChatStatus>Comparing the role with your CV and validating each edit…</ChatStatus>}
               {gemma.status === 'generating' && activeStage && activeStage !== 'design' && <ChatStatus>{analysisActionLabel}</ChatStatus>}
 
-              {showConsent && <AssistantAction title="Before I send this" icon={<WandSparkles size={13} />}>
-                <p>Your work history and the job description go to the cloud AI provider. Your name and contact details are removed first.</p>
-                <div className="mt-3 flex flex-wrap gap-2"><button className="focus-ring bg-white px-3 py-2 text-[10px] font-semibold text-black" onClick={grantCloudConsent}>Use cloud AI</button><button className="focus-ring border border-white/15 px-3 py-2 text-[10px] text-neutral-300" onClick={() => { setPendingCloudAction(null); setShowConsent(false); if (LOCAL_AI_ENABLED) setAiMode('local'); }}>{LOCAL_AI_ENABLED ? 'Keep it private' : 'Not now'}</button></div>
-              </AssistantAction>}
+              {consentPrompt}
 
               {aiMode === 'cloud' && !analysis && jobText.trim().length >= 40 && !cloudBusy && <AssistantAction title="Ready to compare" icon={<WandSparkles size={13} />}>
                 <p>I have the job description. Start the comparison when you’re ready.</p>
