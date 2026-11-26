@@ -64,6 +64,18 @@ A technically comfortable job seeker who already has work history and wants a fa
 - Unsupported browsers receive an actionable fallback instead of a broken AI screen.
 - Signed-in users can list, open, and delete only their own cloud documents. An active, server-controlled premium entitlement is required to create or update a cloud document.
 
+## Experience Bank
+
+A CV holds what fits on two pages; the Experience Bank holds everything else the user has done. For each job, CV Copilot retrieves the most relevant entries and can turn them into tailored bullets.
+
+Acceptance criteria:
+
+- The user can add, edit and delete entries (title, fact, where/when, tags, optional linked CV item); entries persist locally across reloads.
+- Pasting a job posting and choosing Find matching entries returns up to five ranked entries, labeled as keyword, meaning, or both.
+- Semantic search is off until the user turns it on; the screen shows the one-time download size and progress, and keyword search works without it.
+- Add as written inserts the entry's own text as a new bullet in its linked or chosen CV item, with Undo.
+- Write tailored bullets asks for cloud consent, sends only the retrieved entries without contact details, and shows each bullet with the entry it came from before anything changes.
+
 ## Success demo
 
 The presenter opens a prepared local draft, pastes a job posting, consents to cloud analysis, accepts grounded CV suggestions, optionally researches the company with citations, prepares interview material, edits a bullet directly on the preview, and exports a PDF. Private Mode is shown as the on-device alternative.

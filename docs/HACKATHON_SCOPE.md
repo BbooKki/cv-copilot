@@ -43,6 +43,11 @@
 - Employee discovery or contact inference
 - Cover-letter generation
 
+## Post-MVP: Experience Bank
+
+- A local Experience Bank of user-written facts, hybrid retrieval (BM25 + on-device multilingual embeddings) for a job posting, and cloud-generated bullets that each cite one retrieved entry.
+- Out of scope for now: cloud sync of the bank, local Gemma generation from the bank, and automatic import of facts from documents.
+
 ## Post-MVP experimental exception
 
 - A disabled-by-default, user-triggered public-team experiment may return up to five names and roles only when each is cited to a first-party company page.

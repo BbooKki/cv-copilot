@@ -6,6 +6,20 @@ CV Copilot is an AI-assisted application accelerator designed for a hackathon. U
 
 The hackathon MVP includes a responsive structured editor, direct preview editing, four print-ready templates (Classic ATS, Modern Editorial, Professional Sidebar, Minimal Technical), local autosave and undo, guarded job-page extraction, reviewable AI suggestions, optional cited company research, interview preparation, quota-free outreach templates, PDF export, and optional owner-only Supabase backup.
 
+### Experience Bank (RAG)
+
+Keep career facts that don't fit on the CV. For a job posting, CV Copilot retrieves the most relevant entries with hybrid search (BM25 + on-device multilingual E5 embeddings, fused with reciprocal rank fusion) and can write tailored bullets that each cite the entry they came from. The bank stays in the browser; only retrieved entries go to cloud AI, after consent.
+
+Retrieval on the labeled set in `src/retrieval/eval/` (7 English and 2 Korean postings, 16 entries):
+
+| Method | Recall@5 (all) | English | Korean | MRR (all) |
+|---|---|---|---|---|
+| Keyword (BM25) | 0.83 | 1.00 | 0.25 | 0.89 |
+| Semantic (E5) | 0.87 | 0.88 | 0.83 | 0.94 |
+| Hybrid (RRF) | 0.96 | 1.00 | 0.83 | 0.94 |
+
+Rerun with `npm run dev` and open `/src/retrieval/eval/run.html`; the keyword baseline also runs in `npm test`.
+
 ## Stack
 
 - React 19, TypeScript, Vite, and Tailwind CSS

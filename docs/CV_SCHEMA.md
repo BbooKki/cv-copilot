@@ -82,6 +82,25 @@ export type CvDocument = {
 };
 ```
 
+## Experience Bank (separate document)
+
+The bank is stored separately from `CvDocument` so the CV contract is unchanged.
+
+```ts
+type ExperienceBank = {
+  schemaVersion: 1;
+  entries: Array<{
+    id: string;
+    title: string;          // up to 120 characters
+    text: string;           // one fact, up to 600 characters
+    context?: string;       // where/when, up to 120 characters
+    tags: string[];         // up to 12
+    linkedItemId?: string;  // an experience or project ID in the CV
+    updatedAt: string;      // ISO datetime
+  }>;                       // up to 200 entries, unique IDs
+};
+```
+
 ## Validation rules
 
 - IDs are non-empty and unique within their collection.

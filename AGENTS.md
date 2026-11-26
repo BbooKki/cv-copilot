@@ -9,6 +9,7 @@ These instructions apply to the entire repository. Read the documents in `docs/`
 - Ship two polished, responsive CV templates for the hackathon MVP.
 - Do not add payments, collaboration, a template marketplace, DOCX export, autonomous browsing, or drag-anywhere canvas editing.
 - Follow `docs/HACKATHON_SCOPE.md`; move non-MVP ideas to a backlog rather than implementing them.
+- The Experience Bank (retrieval-augmented suggestions from user-written facts) is an approved post-MVP feature; see `docs/HACKATHON_SCOPE.md`.
 
 ## Source of truth
 
@@ -39,6 +40,16 @@ These instructions apply to the entire repository. Read the documents in `docs/`
 - Keep CV text in the browser unless the user explicitly chooses cloud saving.
 - Keep the proven LiteRT-LM worker implementation self-contained in this repository; do not depend on or modify another local project.
 - The known model artifact is `gemma-4-E2B-it-web.litertlm`, verified at `2_008_432_640` bytes. Keep the URL and size centralized.
+
+## Experience Bank and retrieval
+
+- Bank entries are user-owned facts stored only in the browser (`cv-copilot-experience-bank-v1`). Do not sync them to Supabase without an explicit product decision.
+- Retrieval runs in the browser: BM25 plus on-device multilingual E5 embeddings in a dedicated Web Worker, fused with reciprocal rank fusion. Keyword search must keep working when the model is not loaded.
+- Download the embedding model only after the user turns semantic search on, and show its size first. Serve the ONNX Runtime WebAssembly from the app bundle, never from a CDN at runtime.
+- Cloud bank suggestions receive only the retrieved entries (at most five), with contact details removed, after cloud consent.
+- Every bank suggestion cites exactly one retrieved entry, targets an existing experience or project, introduces no number absent from that entry, and is applied only after user approval through the normal undo path.
+- `@huggingface/transformers` depends on `sharp` and `onnxruntime-node`, which run install scripts and are never used in the browser. `package.json` overrides both with `stubs/no-native`; keep that override when upgrading.
+- Measure retrieval changes with the labeled set in `src/retrieval/eval/` (`npm test` for the keyword baseline, `src/retrieval/eval/run.html` in `npm run dev` for hybrid with the real model).
 
 ## URL retrieval
 
