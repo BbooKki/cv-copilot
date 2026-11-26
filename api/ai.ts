@@ -8,6 +8,7 @@ import {buildPeopleResearchPrompt, buildPeopleResearchRetryPrompt, parsePublicPe
 import {buildInterviewKitPrompt, groundInterviewKit, parseInterviewKit, type InterviewKit, type InterviewKitRequest} from '../src/ai/interview.js';
 import {redactCvForCloud} from '../src/ai/redact.js';
 import {assertFitEvidenceExists, assertSuggestionsAreGrounded, assertSuggestionsDoNotClaimGaps, bindSuggestionsToDocument} from '../src/ai/suggestions.js';
+import {assertBankSuggestionsAreGrounded, bankSuggestionRequestEntriesSchema, BANK_MAX_SUGGESTIONS, buildBankSuggestionPrompt, parseBankSuggestionResult, redactBankEntryForCloud, type BankSuggestionRequest, type BankSuggestionResult} from '../src/ai/bank.js';
 import {generateGrounded, generateText, GEMINI_MODEL, GeminiError} from './_lib/gemini.js';
 
 // Allow enough server time for slower (thinking) models on the free tier.
@@ -20,6 +21,8 @@ const ANALYSIS_REPAIR_MAX_TOKENS = 520;
 const RESEARCH_MAX_TOKENS = 1_600;
 const PEOPLE_RESEARCH_MAX_TOKENS = 900;
 const INTERVIEW_MAX_TOKENS = 1_800;
+const BANK_MAX_TOKENS = 700;
+const BANK_REPAIR_MAX_TOKENS = 400;
 
 const jobSchema = z.object({
   source: z.enum(['url', 'pasted']),
@@ -47,11 +50,20 @@ const interviewKitRequestSchema = z.object({
   }).strict().optional(),
 });
 
+const bankSuggestionRequestSchema = z.object({
+  protocolVersion: z.literal(1),
+  cv: cvDocumentSchema,
+  job: z.object({title: z.string().max(300).optional(), company: z.string().max(200).optional(), text: z.string().min(1).max(20_000)}).strict(),
+  entries: bankSuggestionRequestEntriesSchema,
+  options: z.object({maxSuggestions: z.number().int().min(1).max(BANK_MAX_SUGGESTIONS)}).strict(),
+});
+
 const bodySchema = z.discriminatedUnion('operation', [
   z.object({operation: z.literal('analyze'), request: analyzeRequestSchema}).strict(),
   z.object({operation: z.literal('research-company'), input: companyResearchInputSchema}).strict(),
   z.object({operation: z.literal('research-people'), input: peopleResearchInputSchema}).strict(),
   z.object({operation: z.literal('build-interview-kit'), request: interviewKitRequestSchema}).strict(),
+  z.object({operation: z.literal('suggest-from-bank'), request: bankSuggestionRequestSchema}).strict(),
 ]);
 
 const MAX_BODY_BYTES = 200_000;
@@ -121,6 +133,12 @@ export default async function handler(request: IncomingMessage, response: Server
       response.end(JSON.stringify(result));
       return;
     }
+    if (body.operation === 'suggest-from-bank') {
+      const result = await suggestFromBank(body.request);
+      response.statusCode = 200;
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (body.operation === 'build-interview-kit') {
       const kit = await interviewKit(body.request);
       response.statusCode = 200;
@@ -178,6 +196,30 @@ async function generateCloudSuggestions(request: AiAnalysisRequest, fit: AiFitAn
   } catch (firstCause) {
     logInvalidAnalysisStage('suggestions-initial', firstCause);
     return parse(await generateText(buildSuggestionPrompt(request, fit, {repair: true}), {json: true, temperature: 0, maxOutputTokens: ANALYSIS_REPAIR_MAX_TOKENS}));
+  }
+}
+
+/**
+ * Retrieval-augmented generation over the Experience Bank. Retrieval already
+ * happened in the browser; this receives only the retrieved entries.
+ */
+async function suggestFromBank(request: BankSuggestionRequest): Promise<BankSuggestionResult> {
+  const safeRequest: BankSuggestionRequest = {...request, cv: redactCvForCloud(request.cv), entries: request.entries.map(redactBankEntryForCloud)};
+  const parse = (raw: string) => {
+    const parsed = parseBankSuggestionResult(raw);
+    assertBankSuggestionsAreGrounded(safeRequest.cv, safeRequest.entries, parsed.suggestions);
+    return parsed;
+  };
+  try {
+    return parse(await generateText(buildBankSuggestionPrompt(safeRequest), {json: true, temperature: 0.1, maxOutputTokens: BANK_MAX_TOKENS}));
+  } catch (firstCause) {
+    logInvalidAnalysisStage('bank-initial', firstCause);
+    try {
+      return parse(await generateText(buildBankSuggestionPrompt(safeRequest, {repair: true}), {json: true, temperature: 0, maxOutputTokens: BANK_REPAIR_MAX_TOKENS}));
+    } catch (repairCause) {
+      logInvalidAnalysisStage('bank-repair', repairCause);
+      throw new GeminiError('invalid-output', 'No grounded suggestion could be made from your Experience Bank. Try again or add an entry as written.', 502);
+    }
   }
 }
 

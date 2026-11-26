@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Bot, Check, Download, FileText, Globe, HardDrive, LoaderCircle, MessageSquare, Mic, PenLine, RotateCcw, Send, Square, WandSparkles, X} from 'lucide-react';
+import {Bot, Check, Download, FileText, Globe, HardDrive, Library, LoaderCircle, MessageSquare, Mic, PenLine, RotateCcw, Send, Square, WandSparkles, X} from 'lucide-react';
 import {buildDesignPrompt, parseDesignRecommendation, type AiDesignRecommendation} from '../ai/design';
 import {DesignAssistantPanel} from '../ai/DesignAssistantPanel';
 import {InvalidOutputPanel} from '../ai/InvalidOutputPanel';
@@ -35,10 +35,11 @@ import {LandingPage} from '../landing/LandingPage';
 import {PricingPage} from '../pricing/PricingPage';
 import {ApplicationKit} from './ApplicationKit';
 import {ContactStrategyCard} from './ContactStrategyCard';
+import {BankPanel} from '../bank/BankPanel';
 
 
 type View = 'cv' | 'copilot';
-type CopilotMode = 'edit' | 'tailor';
+type CopilotMode = 'edit' | 'tailor' | 'bank';
 type TailorView = 'conversation' | 'kit';
 type GenerationStage = 'fit' | 'suggestions' | 'design' | null;
 type TailorMessage = {id: string; role: 'user' | 'assistant'; text: string};
@@ -102,7 +103,8 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     try { return localStorage.getItem(CLOUD_CONSENT_KEY) === 'granted'; } catch { return false; }
   });
   const [showConsent, setShowConsent] = useState(false);
-  const [pendingCloudAction, setPendingCloudAction] = useState<'analysis' | 'interview' | null>(null);
+  const [pendingCloudAction, setPendingCloudAction] = useState<'analysis' | 'interview' | 'bank' | null>(null);
+  const pendingBankActionRef = useRef<(() => void) | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [analysisNotice, setAnalysisNotice] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -481,6 +483,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
     pendingCloudRequestRef.current = null;
     setPendingCloudAction(null);
     if (action === 'interview') { setTailorView('kit'); void runInterviewKit(); }
+    else if (action === 'bank') { const run = pendingBankActionRef.current; pendingBankActionRef.current = null; run?.(); }
     else void runCloudAnalysis(pendingRequest ?? undefined);
   };
 
@@ -582,9 +585,10 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
       <aside className={`glass-panel copilot-shell no-print min-h-[calc(100vh-78px)] overflow-hidden lg:h-[calc(100vh-92px)] lg:overflow-y-auto ${view !== 'copilot' ? 'hidden lg:block' : ''}`} aria-label="CV Copilot">
         <div className="copilot-header sticky top-0 z-10 border-b border-white/10 p-4 md:p-5">
           <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[.16em] text-neutral-600">Private assistant</p><h2 className="mt-1 font-display text-xl font-semibold">CV Copilot</h2></div><button className="focus-ring p-2 text-neutral-500 hover:text-white md:hidden" onClick={undo} disabled={!undoStack.length}><RotateCcw size={18} /></button></div>
-          <div className="segmented-control mt-4 grid grid-cols-2 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
+          <div className="segmented-control mt-4 grid grid-cols-3 border border-white/10 p-1" role="tablist" aria-label="Copilot modes">
             <button role="tab" aria-selected={copilotMode === 'edit'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'edit' ? 'text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('edit')}><PenLine size={14} />Edit CV</button>
             <button role="tab" aria-selected={copilotMode === 'tailor'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'tailor' ? 'text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('tailor')}><MessageSquare size={14} />Tailor</button>
+            <button role="tab" aria-selected={copilotMode === 'bank'} className={`focus-ring flex items-center justify-center gap-2 px-3 py-2.5 text-xs ${copilotMode === 'bank' ? 'text-black' : 'text-neutral-500 hover:text-white'}`} onClick={() => setCopilotMode('bank')}><Library size={14} />Bank</button>
           </div>
         </div>
 
@@ -598,7 +602,16 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             <div className="mt-3 flex flex-wrap gap-2">{STYLE_PRESETS.map(preset => { const active = document.settings.accentColor.toLowerCase() === preset.accentColor.toLowerCase() && document.settings.density === preset.density; return <button key={preset.id} className={`focus-ring flex items-center gap-2 border px-3 py-2 text-xs ${active ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-400 hover:border-white/30 hover:text-white'}`} onClick={() => updateSettings({accentColor: preset.accentColor, density: preset.density})}><span className="h-3 w-3 border border-white/20" style={{backgroundColor: preset.accentColor}} />{preset.name}</button>; })}</div>
           </section>
           {LOCAL_AI_ENABLED && <DesignAssistantPanel settings={document.settings} status={gemma.status} progressPercent={progress} hasContent={cvHasContent} isDesignGenerating={gemma.status === 'generating' && activeStage === 'design'} generationElapsedLabel={elapsedLabel} generationPhaseLabel={generationPhaseLabel} generatedCharacters={gemma.generatedCharacters} recommendation={designRecommendation} error={designError || (activeStage === 'design' ? gemma.error : '')} onOpenTailor={() => setCopilotMode('tailor')} onGenerate={runDesignRecommendation} onCancel={cancelGeneration} onAccept={acceptDesignRecommendation} onDismiss={() => { setDesignRecommendation(null); setDesignError(''); }} />}
-        </div> : <div className="p-4 md:p-5">
+        </div> : copilotMode === 'bank' ? <BankPanel
+          document={document}
+          jobText={jobText}
+          onJobTextChange={setJobText}
+          jobTitle={jobMeta.title}
+          jobCompany={jobMeta.company}
+          cloudConsent={cloudConsent}
+          onRequestCloudConsent={onGranted => { pendingBankActionRef.current = onGranted; setPendingCloudAction('bank'); setShowConsent(true); }}
+          onApplyDocument={next => updateDocument(next, true)}
+        /> : <div className="p-4 md:p-5">
           <div className={`segmented-control mb-3 grid ${analysis ? 'grid-cols-2' : 'grid-cols-1'} border border-white/10 p-1`} role="tablist" aria-label="Tailor workspace">
             <button role="tab" aria-selected={tailorView === 'conversation'} className="focus-ring min-h-10 px-3 py-2 text-xs text-neutral-500 hover:text-white" onClick={() => setTailorView('conversation')}>Conversation</button>
             {analysis && <button role="tab" aria-selected={tailorView === 'kit'} className="focus-ring min-h-10 px-3 py-2 text-xs text-neutral-500 hover:text-white" onClick={() => setTailorView('kit')}>Application kit{completedKitItems > 0 ? ` · ${completedKitItems}` : ''}</button>}

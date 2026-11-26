@@ -14,6 +14,9 @@ flowchart LR
     A --> G["Gemini + optional Google grounding"]
     UI -. "optional sync" .-> S["Supabase Auth + Postgres"]
     UI --> P["Print/PDF renderer"]
+    UI <--> B["Experience Bank (local)"]
+    UI --> E["Embedding Web Worker"]
+    E <--> EC["Browser model cache"]
 ```
 
 ## Trust boundaries
@@ -40,6 +43,14 @@ Runtime sessions explicitly disable audio and vision modalities. Every text gene
 
 The worker reports `queued`, conversation creation, conversation ready, and first-token/decode phases. The UI shows the phase, elapsed time, and local output character count without exposing CV text in logs.
 
+### Experience Bank retrieval
+
+The bank lives in local storage and is never sent anywhere for search. Retrieval combines BM25 over each entry (title, context, fact, tags) with cosine similarity from multilingual E5 embeddings, fused by reciprocal rank fusion. A job posting is split into requirement-sized chunks; an entry's semantic score is its best match against any chunk, so one strong requirement is not diluted by the rest of the posting. Hangul and CJK count double when deciding whether a line is a requirement or a header, because short Korean lines carry full requirements.
+
+The embedding worker loads `Xenova/multilingual-e5-small` (quantized, about 135 MB with tokenizer) through transformers.js on the WASM backend, only after the user turns semantic search on, and caches it with the Cache API. The ONNX Runtime WebAssembly file is bundled with the app. Passage vectors are reused for unchanged entries during a session.
+
+Generation is a separate cloud operation, `suggest-from-bank`, that receives at most five retrieved entries plus the redacted CV item list.
+
 ### Job extraction function
 
 The function accepts one public HTTP(S) URL and returns normalized, size-limited job text plus basic metadata. It is not a general proxy. It must validate DNS/IP destinations before requests and redirects, allow only appropriate textual content, enforce timeout/size limits, and sanitize the document.
@@ -60,6 +71,8 @@ src/
 ├── ai/                  prompts, schemas, suggestion workflow
 ├── gemma/               worker, protocol, runtime facade
 ├── jobs/                URL/text ingestion and normalization
+├── bank/                Experience Bank schema, local repository, panel
+├── retrieval/           BM25, embeddings worker, hybrid ranking, evaluation
 ├── persistence/         local and Supabase repositories
 ├── print/               print preparation and pagination helpers
 └── test/                fixtures and shared test utilities

@@ -1,0 +1,7 @@
+{
+  "name": "no-native-stub",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Replaces sharp and onnxruntime-node for @huggingface/transformers. The browser build never imports them, and the real packages run install scripts.",
+  "main": "index.js"
+}

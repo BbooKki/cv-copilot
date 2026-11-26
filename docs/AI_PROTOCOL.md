@@ -128,6 +128,31 @@ export type AiAnalysisResult = {
 8. If fit validation fails, offer a smaller fit-only retry. If suggestion validation fails, preserve the fit result and offer a one-suggestion retry.
 9. Stop any generation that exceeds 90 seconds, preserve its partial output for diagnosis, and offer a compact retry for only the failed stage.
 
+## Experience Bank suggestion protocol
+
+Retrieval happens in the browser. The `suggest-from-bank` operation receives the redacted CV, the job text, and one to five retrieved bank entries with emails and phone numbers removed. Bank entries are user-owned facts; the job text stays untrusted and enveloped.
+
+```ts
+export type BankSuggestionResult = {
+  protocolVersion: 1;
+  suggestions: Array<{
+    id: string;
+    bankEntryId: string;  // exactly one retrieved entry
+    target: {section: "experience" | "projects"; itemId: string};
+    proposedText: string; // a new bullet, at most 280 characters
+    reason: string;       // at most 200 characters
+  }>;                     // at most 3
+};
+```
+
+Validation, on the server and again in the browser:
+
+- `bankEntryId` must be one of the entries sent; each entry is used at most once.
+- The target item must exist; an entry with `linkedItemId` must target that item.
+- `proposedText` may not contain a number absent from the cited entry, and may not duplicate an existing bullet.
+- Malformed or ungrounded output gets one smaller repair attempt, then an actionable error. The user can always add an entry as written instead.
+- Accepted bullets are appended to the target item through the normal undo history.
+
 ## Design recommendation protocol
 
 Gemma may recommend presentation settings but must not generate HTML, CSS, React, scripts, or a new renderer. The exact output is:
