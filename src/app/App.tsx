@@ -30,6 +30,7 @@ import {TemplatePicker} from '../templates/TemplatePicker';
 import {templateName} from '../templates/templateCatalog';
 import {STYLE_PRESETS} from '../templates/presets';
 import {AccountMenu} from '../persistence/AccountMenu';
+import {isSupabaseConfigured} from '../persistence/supabaseClient';
 import {AccountPage} from '../persistence/AccountPage';
 import {LandingPage} from '../landing/LandingPage';
 import {PricingPage} from '../pricing/PricingPage';
@@ -59,12 +60,22 @@ export function App() {
     setRoute(appRoute(new URL(path, window.location.origin).pathname));
   }, []);
 
-  if (route === 'landing') {
+  // Without Supabase config, account and pricing pages would be dead ends, so hide them.
+  const accountsEnabled = isSupabaseConfigured;
+  useEffect(() => {
+    if (accountsEnabled || route === 'landing' || route === 'workspace') return;
+    window.history.replaceState({}, '', '/');
+    setRoute('landing');
+  }, [accountsEnabled, route]);
+
+  if (route === 'landing' || (!accountsEnabled && route !== 'workspace')) {
     return <LandingPage
       onStart={() => navigate('/app')}
-      onPricing={() => navigate('/pricing')}
-      onSignIn={() => navigate('/account?mode=sign-in&from=landing')}
-      onSignUp={() => navigate('/account?mode=sign-up&from=landing')}
+      {...(accountsEnabled && {
+        onPricing: () => navigate('/pricing'),
+        onSignIn: () => navigate('/account?mode=sign-in&from=landing'),
+        onSignUp: () => navigate('/account?mode=sign-up&from=landing'),
+      })}
     />;
   }
 
@@ -570,7 +581,7 @@ function Workspace({onOpenAccount}: {onOpenAccount: () => void}) {
             <button className="focus-ring bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-200 disabled:opacity-30" disabled={!cvHasContent} onClick={() => window.print()}><Download size={14} className="mr-1 inline" />Export PDF</button>
           </div>
           <button aria-label="Export PDF" className="focus-ring grid h-10 w-10 place-items-center border border-white/15 text-neutral-300 disabled:opacity-30 md:hidden" disabled={!cvHasContent} onClick={() => window.print()}><Download size={16} /></button>
-          <AccountMenu onOpenAccount={onOpenAccount} />
+          {isSupabaseConfigured && <AccountMenu onOpenAccount={onOpenAccount} />}
         </div>
       </div>
       <nav className="glass-toolbar segmented-control mx-auto mt-2 flex max-w-[1800px] p-1 lg:hidden" aria-label="Workspace views">{(['cv', 'copilot'] as const).map(item => <button key={item} aria-selected={view === item} className={`focus-ring flex-1 px-3 py-2.5 font-mono text-[10px] uppercase tracking-widest ${view === item ? 'text-black' : 'text-neutral-500'}`} onClick={() => setView(item)}>{item}</button>)}</nav>

@@ -3,9 +3,10 @@ import {LOCAL_AI_ENABLED} from '../gemma/config';
 
 type LandingPageProps = {
   onStart: () => void;
-  onPricing: () => void;
-  onSignIn: () => void;
-  onSignUp: () => void;
+  /** Account and pricing entry points render only when accounts are configured. */
+  onPricing?: () => void;
+  onSignIn?: () => void;
+  onSignUp?: () => void;
 };
 
 const FEATURES = [
@@ -86,9 +87,9 @@ export function LandingPage({onStart, onPricing, onSignIn, onSignUp}: LandingPag
         <nav className="flex items-center gap-2" aria-label="Primary">
           <a href="#features" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">Features</a>
           <a href="#how" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white sm:inline-block">How it works</a>
-          <button type="button" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white md:inline-block" onClick={onPricing}>Pricing</button>
-          <button type="button" className="focus-ring min-h-10 whitespace-nowrap px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={onSignIn}>Sign in</button>
-          <button type="button" className="focus-ring flex min-h-10 items-center gap-1.5 whitespace-nowrap bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onSignUp}>Create account<ArrowRight size={14} /></button>
+          {onPricing && <button type="button" className="focus-ring hidden px-3 py-2 text-xs text-neutral-400 hover:text-white md:inline-block" onClick={onPricing}>Pricing</button>}
+          {onSignIn && <button type="button" className="focus-ring min-h-10 whitespace-nowrap px-3 py-2 text-xs text-neutral-300 hover:text-white" onClick={onSignIn}>Sign in</button>}
+          <button type="button" className="focus-ring flex min-h-10 items-center gap-1.5 whitespace-nowrap bg-white px-4 py-2 text-xs font-semibold text-black hover:bg-neutral-200" onClick={onSignUp ?? onStart}>{onSignUp ? 'Create account' : 'Open editor'}<ArrowRight size={14} /></button>
         </nav>
       </div>
     </header>

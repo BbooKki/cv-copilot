@@ -8,6 +8,13 @@ const gemmaHarness = vi.hoisted(() => ({
   generate: vi.fn(),
 }));
 
+const accountsHarness = vi.hoisted(() => ({enabled: false}));
+
+vi.mock('../persistence/supabaseClient', async importOriginal => ({
+  ...await importOriginal<typeof import('../persistence/supabaseClient')>(),
+  get isSupabaseConfigured() { return accountsHarness.enabled; },
+}));
+
 vi.mock('../gemma/useGemma', () => ({
   useGemma: (onComplete: (raw: string) => void, onGenerationTimeout: (partialOutput: string) => void) => {
     gemmaHarness.complete = onComplete;
@@ -368,7 +375,9 @@ describe('cloud analysis (default)', () => {
 });
 
 describe('account routing', () => {
+  beforeEach(() => { accountsHarness.enabled = true; });
   afterEach(() => {
+    accountsHarness.enabled = false;
     cleanup();
     window.history.replaceState({}, '', '/');
   });
@@ -388,7 +397,9 @@ describe('account routing', () => {
 });
 
 describe('landing page', () => {
+  beforeEach(() => { accountsHarness.enabled = true; });
   afterEach(() => {
+    accountsHarness.enabled = false;
     cleanup();
     window.history.replaceState({}, '', '/');
   });
@@ -425,5 +436,42 @@ describe('landing page', () => {
     fireEvent.click((await screen.findAllByRole('button', {name: /Start building/i}))[0]);
     expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
     expect(window.location.pathname).toBe('/app');
+  });
+});
+
+describe('accounts not configured', () => {
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('hides sign-in, sign-up and pricing on the landing page and opens the editor instead', async () => {
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Sign in'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Create account'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Pricing'})).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Open editor'}));
+    expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/app');
+  });
+
+  it('hides the account menu in the editor', async () => {
+    window.history.replaceState({}, '', '/app');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', {name: 'CV Copilot', level: 1})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Sign in'})).not.toBeInTheDocument();
+  });
+
+  it.each(['/account', '/account/reset-password', '/pricing'])('redirects %s to the landing page', async path => {
+    window.history.replaceState({}, '', path);
+    render(<App />);
+
+    expect(await screen.findByRole('heading', {name: /Tailor your CV to any job/, level: 1})).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
   });
 });
