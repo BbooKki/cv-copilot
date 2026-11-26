@@ -1,7 +1,7 @@
 import {z} from 'zod';
-import {bankEntrySchema, type BankEntry} from '../bank/schema';
-import {makeId, type CvDocument} from '../cv/schema';
-import {buildUntrustedPromptEnvelope, neutralizePromptBoundaries, ANALYSIS_JOB_CHAR_LIMIT} from './protocol';
+import {bankEntrySchema, type BankEntry} from '../bank/schema.js';
+import {makeId, type CvDocument} from '../cv/schema.js';
+import {buildUntrustedPromptEnvelope, neutralizePromptBoundaries, ANALYSIS_JOB_CHAR_LIMIT} from './protocol.js';
 
 /**
  * Retrieval-augmented suggestions from the Experience Bank. The browser
