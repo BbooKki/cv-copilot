@@ -173,10 +173,12 @@ async function generateCloudFit(request: AiAnalysisRequest): Promise<AiFitAnalys
   try {
     return parse(await generateText(buildFitAnalysisPrompt(request), {json: true, temperature: 0.1, maxOutputTokens: ANALYSIS_MAX_TOKENS}));
   } catch (firstCause) {
+    rethrowProviderError(firstCause);
     logInvalidAnalysisStage('fit-initial', firstCause);
     try {
       return parse(await generateText(buildFitAnalysisPrompt(request, {repair: true}), {json: true, temperature: 0, maxOutputTokens: ANALYSIS_REPAIR_MAX_TOKENS}));
     } catch (repairCause) {
+      rethrowProviderError(repairCause);
       logInvalidAnalysisStage('fit-repair', repairCause);
       throw new GeminiError('invalid-output', 'The AI returned an unusable fit analysis. Please try again.', 502);
     }
@@ -194,6 +196,7 @@ async function generateCloudSuggestions(request: AiAnalysisRequest, fit: AiFitAn
   try {
     return parse(await generateText(buildSuggestionPrompt(request, fit), {json: true, temperature: 0.1, maxOutputTokens: ANALYSIS_MAX_TOKENS}));
   } catch (firstCause) {
+    rethrowProviderError(firstCause);
     logInvalidAnalysisStage('suggestions-initial', firstCause);
     return parse(await generateText(buildSuggestionPrompt(request, fit, {repair: true}), {json: true, temperature: 0, maxOutputTokens: ANALYSIS_REPAIR_MAX_TOKENS}));
   }
@@ -213,14 +216,24 @@ async function suggestFromBank(request: BankSuggestionRequest): Promise<BankSugg
   try {
     return parse(await generateText(buildBankSuggestionPrompt(safeRequest), {json: true, temperature: 0.1, maxOutputTokens: BANK_MAX_TOKENS}));
   } catch (firstCause) {
+    rethrowProviderError(firstCause);
     logInvalidAnalysisStage('bank-initial', firstCause);
     try {
       return parse(await generateText(buildBankSuggestionPrompt(safeRequest, {repair: true}), {json: true, temperature: 0, maxOutputTokens: BANK_REPAIR_MAX_TOKENS}));
     } catch (repairCause) {
+      rethrowProviderError(repairCause);
       logInvalidAnalysisStage('bank-repair', repairCause);
       throw new GeminiError('invalid-output', 'No grounded suggestion could be made from your Experience Bank. Try again or add an entry as written.', 502);
     }
   }
+}
+
+/**
+ * Retries exist for unusable model output. Provider failures (bad key, quota, timeout,
+ * unknown model) must reach the user as-is instead of becoming "unusable output".
+ */
+function rethrowProviderError(cause: unknown): void {
+  if (cause instanceof GeminiError && cause.code !== 'invalid-output') throw cause;
 }
 
 function logInvalidAnalysisStage(stage: string, cause: unknown): void {

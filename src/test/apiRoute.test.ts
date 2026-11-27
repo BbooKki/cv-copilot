@@ -245,3 +245,46 @@ function responseDouble(): {value: ServerResponse; status: () => number; body: (
   } as unknown as ServerResponse;
   return {value, status: () => value.statusCode, body: () => body, header: name => headers.get(name.toLowerCase())};
 }
+
+describe('/api/ai provider errors', () => {
+  const bankBody = () => JSON.stringify({operation: 'suggest-from-bank', request: {
+    protocolVersion: 1,
+    cv: testCv,
+    job: {text: 'Frontend engineer building Vue 3 monitoring dashboards for an operations team.'},
+    entries: [{id: 'b1', title: 'Batch job monitoring', text: 'Built a Vue 3 dashboard for nightly batch jobs.', tags: ['dashboards'], updatedAt: '2026-01-01T00:00:00.000Z'}],
+    options: {maxSuggestions: 3},
+  }});
+
+  it.each([
+    [403, 'auth', /rejected the API key/],
+    [404, 'unknown', /HTTP 404/],
+  ])('reports a fit-analysis provider HTTP %i as itself, not as unusable output', async (status, code, message) => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', {status}));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = responseDouble();
+
+    await handler(requestDouble(analyzeBody(), `fit-provider-${status}`), response.value);
+
+    const body = JSON.parse(response.body());
+    expect(body.code).toBe(code);
+    expect(body.error).toMatch(message);
+    expect(body.error).not.toMatch(/unusable/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an Experience Bank quota error as itself, not as "no grounded suggestion"', async () => {
+    process.env.CLOUD_AI_ENABLED = 'true';
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {status: 429})));
+    const response = responseDouble();
+
+    await handler(requestDouble(bankBody(), 'bank-provider-429'), response.value);
+
+    expect(response.status()).toBe(429);
+    expect(JSON.parse(response.body())).toMatchObject({code: 'quota'});
+  });
+});
